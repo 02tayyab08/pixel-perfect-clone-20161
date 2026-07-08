@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getCurrentUser, getSessionOrgs } from "./session.server";
-import { salniService } from "./supabase.server";
+import { salniAsUser } from "./supabase.server";
 
 export type SessionSummary = {
   user: { id: string; email: string | null } | null;
@@ -11,20 +11,25 @@ export const getSessionFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<SessionSummary> => {
     const user = await getCurrentUser();
     if (!user) return { user: null, orgs: [] };
-    const cookieOrgs = getSessionOrgs();
 
-    const svc = salniService();
-    // Read the user's org memberships via service role (schema-authoritative table names
-    // from V2.1: `organization_members(user_id, org_id, role)` joined to `organizations`).
-    const { data, error } = await svc
+    // Read as the authenticated user so RLS applies and Data API grant issues
+    // surface loudly instead of being masked by the service role.
+    const asUser = salniAsUser(user.accessToken);
+    const { data, error } = await asUser
       .from("organization_members")
-      .select("role, org:organizations(id, name, slug)")
+      .select("role, organization_id, org:organizations(id, name, slug)")
       .eq("user_id", user.userId);
-    // schema: organization_members(organization_id, user_id, role) — join alias 'org' works via FK.
 
     if (error) {
-      console.error("getSessionFn: failed to load orgs", error);
-      return { user: { id: user.userId, email: user.email }, orgs: cookieOrgs };
+      console.error("getSessionFn orgs read failed", {
+        code: (error as { code?: string }).code,
+        message: error.message,
+        details: (error as { details?: string }).details,
+        hint: (error as { hint?: string }).hint,
+      });
+      // Only fall back to cookie-cached orgs when the read errored — an empty
+      // successful read means the user genuinely has no memberships.
+      return { user: { id: user.userId, email: user.email }, orgs: getSessionOrgs() };
     }
 
     const orgs = (data ?? [])
@@ -41,11 +46,6 @@ export const getSessionFn = createServerFn({ method: "GET" }).handler(
       })
       .filter((v): v is NonNullable<typeof v> => v !== null);
 
-    const merged = [
-      ...orgs,
-      ...cookieOrgs.filter((cookieOrg) => !orgs.some((org) => org.slug === cookieOrg.slug)),
-    ];
-
-    return { user: { id: user.userId, email: user.email }, orgs: merged };
+    return { user: { id: user.userId, email: user.email }, orgs };
   },
 );
