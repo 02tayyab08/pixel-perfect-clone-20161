@@ -30,7 +30,15 @@ function SignInPage() {
         setError(res.error);
         return;
       }
-      await navigate({ to: "/app" });
+      const session = await fetch("/api/session", { credentials: "include" });
+      if (session.ok) {
+        const data = (await session.json()) as { orgs?: Array<{ slug: string }> };
+        if (data.orgs?.[0]?.slug) {
+          await navigate({ to: "/app/$slug", params: { slug: data.orgs[0].slug } });
+          return;
+        }
+      }
+      await navigate({ to: "/onboarding" });
     } catch (err) {
       console.error("Sign-in submit failed", err);
       setError("Sign-in failed. Please try again.");
