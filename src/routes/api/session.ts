@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getCurrentUser, getSessionOrgs } from "@/lib/session.server";
-import { salniService } from "@/lib/supabase.server";
+import { salniAsUser } from "@/lib/supabase.server";
 
 export const Route = createFileRoute("/api/session")({
   server: {
@@ -10,17 +10,25 @@ export const Route = createFileRoute("/api/session")({
         if (!user) {
           return Response.json({ userId: null, email: null, orgs: [] }, { status: 401 });
         }
-        const cookieOrgs = getSessionOrgs();
 
-        const svc = salniService();
-        const { data, error } = await svc
+        const asUser = salniAsUser(user.accessToken);
+        const { data, error } = await asUser
           .from("organization_members")
-          .select("role, org:organizations(id, name, slug)")
+          .select("role, organization_id, org:organizations(id, name, slug)")
           .eq("user_id", user.userId);
 
         if (error) {
-          console.error("/api/session: failed to load orgs", error);
-          return Response.json({ userId: user.userId, email: user.email, orgs: cookieOrgs });
+          console.error("/api/session orgs read failed", {
+            code: (error as { code?: string }).code,
+            message: error.message,
+            details: (error as { details?: string }).details,
+            hint: (error as { hint?: string }).hint,
+          });
+          return Response.json({
+            userId: user.userId,
+            email: user.email,
+            orgs: getSessionOrgs(),
+          });
         }
 
         const orgs = (data ?? [])
@@ -37,12 +45,7 @@ export const Route = createFileRoute("/api/session")({
           })
           .filter((v): v is { id: string; name: string; slug: string; role: string } => v !== null);
 
-        const merged = [
-          ...orgs,
-          ...cookieOrgs.filter((cookieOrg) => !orgs.some((org) => org.slug === cookieOrg.slug)),
-        ];
-
-        return Response.json({ userId: user.userId, email: user.email, orgs: merged });
+        return Response.json({ userId: user.userId, email: user.email, orgs });
       },
     },
   },
