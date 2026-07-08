@@ -41,7 +41,7 @@ function OnboardingPage() {
       if (!res.ok) {
         if (res.error === "slug_taken" && "suggestions" in res) {
           setError("That URL is taken. Try one of these:");
-          setSuggestions(res.suggestions);
+          setSuggestions(res.suggestions ?? []);
         } else {
           setError(res.error);
         }

@@ -9,13 +9,34 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthSignUpRouteImport } from './routes/auth.sign-up'
+import { Route as AuthSignInRouteImport } from './routes/auth.sign-in'
 import { Route as ApiQueryRouteImport } from './routes/api/query'
+import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated.onboarding'
+import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.app'
 import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
+import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
+import { Route as AuthenticatedAppSlugIndexRouteImport } from './routes/_authenticated.app.$slug.index'
 
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthSignUpRoute = AuthSignUpRouteImport.update({
+  id: '/auth/sign-up',
+  path: '/auth/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthSignInRoute = AuthSignInRouteImport.update({
+  id: '/auth/sign-in',
+  path: '/auth/sign-in',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiQueryRoute = ApiQueryRouteImport.update({
@@ -23,50 +44,141 @@ const ApiQueryRoute = ApiQueryRouteImport.update({
   path: '/api/query',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const ApiPublicProcessDocumentsRoute =
   ApiPublicProcessDocumentsRouteImport.update({
     id: '/api/public/process-documents',
     path: '/api/public/process-documents',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedAppSlugRoute = AuthenticatedAppSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
+const AuthenticatedAppSlugIndexRoute =
+  AuthenticatedAppSlugIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAppSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/app': typeof AuthenticatedAppRouteWithChildren
+  '/onboarding': typeof AuthenticatedOnboardingRoute
   '/api/query': typeof ApiQueryRoute
+  '/auth/sign-in': typeof AuthSignInRoute
+  '/auth/sign-up': typeof AuthSignUpRoute
+  '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/app/$slug/': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app': typeof AuthenticatedAppRouteWithChildren
+  '/onboarding': typeof AuthenticatedOnboardingRoute
   '/api/query': typeof ApiQueryRoute
+  '/auth/sign-in': typeof AuthSignInRoute
+  '/auth/sign-up': typeof AuthSignUpRoute
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/app/$slug': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
+  '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/api/query': typeof ApiQueryRoute
+  '/auth/sign-in': typeof AuthSignInRoute
+  '/auth/sign-up': typeof AuthSignUpRoute
+  '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/_authenticated/app/$slug/': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/query' | '/api/public/process-documents'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/onboarding'
+    | '/api/query'
+    | '/auth/sign-in'
+    | '/auth/sign-up'
+    | '/app/$slug'
+    | '/api/public/process-documents'
+    | '/app/$slug/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/query' | '/api/public/process-documents'
-  id: '__root__' | '/' | '/api/query' | '/api/public/process-documents'
+  to:
+    | '/'
+    | '/app'
+    | '/onboarding'
+    | '/api/query'
+    | '/auth/sign-in'
+    | '/auth/sign-up'
+    | '/api/public/process-documents'
+    | '/app/$slug'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/_authenticated/app'
+    | '/_authenticated/onboarding'
+    | '/api/query'
+    | '/auth/sign-in'
+    | '/auth/sign-up'
+    | '/_authenticated/app/$slug'
+    | '/api/public/process-documents'
+    | '/_authenticated/app/$slug/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   ApiQueryRoute: typeof ApiQueryRoute
+  AuthSignInRoute: typeof AuthSignInRoute
+  AuthSignUpRoute: typeof AuthSignUpRoute
   ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/sign-up': {
+      id: '/auth/sign-up'
+      path: '/auth/sign-up'
+      fullPath: '/auth/sign-up'
+      preLoaderRoute: typeof AuthSignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/sign-in': {
+      id: '/auth/sign-in'
+      path: '/auth/sign-in'
+      fullPath: '/auth/sign-in'
+      preLoaderRoute: typeof AuthSignInRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/query': {
@@ -76,6 +188,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiQueryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/onboarding': {
+      id: '/_authenticated/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/app': {
+      id: '/_authenticated/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AuthenticatedAppRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/api/public/process-documents': {
       id: '/api/public/process-documents'
       path: '/api/public/process-documents'
@@ -83,12 +209,65 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicProcessDocumentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/app/$slug': {
+      id: '/_authenticated/app/$slug'
+      path: '/$slug'
+      fullPath: '/app/$slug'
+      preLoaderRoute: typeof AuthenticatedAppSlugRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/_authenticated/app/$slug/': {
+      id: '/_authenticated/app/$slug/'
+      path: '/'
+      fullPath: '/app/$slug/'
+      preLoaderRoute: typeof AuthenticatedAppSlugIndexRouteImport
+      parentRoute: typeof AuthenticatedAppSlugRoute
+    }
   }
 }
 
+interface AuthenticatedAppSlugRouteChildren {
+  AuthenticatedAppSlugIndexRoute: typeof AuthenticatedAppSlugIndexRoute
+}
+
+const AuthenticatedAppSlugRouteChildren: AuthenticatedAppSlugRouteChildren = {
+  AuthenticatedAppSlugIndexRoute: AuthenticatedAppSlugIndexRoute,
+}
+
+const AuthenticatedAppSlugRouteWithChildren =
+  AuthenticatedAppSlugRoute._addFileChildren(AuthenticatedAppSlugRouteChildren)
+
+interface AuthenticatedAppRouteChildren {
+  AuthenticatedAppSlugRoute: typeof AuthenticatedAppSlugRouteWithChildren
+}
+
+const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
+  AuthenticatedAppSlugRoute: AuthenticatedAppSlugRouteWithChildren,
+}
+
+const AuthenticatedAppRouteWithChildren =
+  AuthenticatedAppRoute._addFileChildren(AuthenticatedAppRouteChildren)
+
+interface AuthenticatedRouteChildren {
+  AuthenticatedAppRoute: typeof AuthenticatedAppRouteWithChildren
+  AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAppRoute: AuthenticatedAppRouteWithChildren,
+  AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
   ApiQueryRoute: ApiQueryRoute,
+  AuthSignInRoute: AuthSignInRoute,
+  AuthSignUpRoute: AuthSignUpRoute,
   ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
 }
 export const routeTree = rootRouteImport
