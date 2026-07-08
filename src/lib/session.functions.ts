@@ -27,9 +27,15 @@ export const getSessionFn = createServerFn({ method: "GET" }).handler(
 
     const orgs = (data ?? [])
       .map((row) => {
-        const org = (row as { org: { id: string; name: string; slug: string } | null }).org;
-        const role = (row as { role: string }).role;
-        return org ? { id: org.id, name: org.name, slug: org.slug, role } : null;
+        const raw = row as {
+          role: string;
+          org:
+            | { id: string; name: string; slug: string }
+            | Array<{ id: string; name: string; slug: string }>
+            | null;
+        };
+        const org = Array.isArray(raw.org) ? raw.org[0] : raw.org;
+        return org ? { id: org.id, name: org.name, slug: org.slug, role: raw.role } : null;
       })
       .filter((v): v is NonNullable<typeof v> => v !== null);
 
