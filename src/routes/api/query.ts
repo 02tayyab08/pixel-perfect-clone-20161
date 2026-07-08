@@ -33,7 +33,7 @@ export const Route = createFileRoute("/api/query")({
         // Verify org membership using the user's JWT (RLS).
         const asUser = salniAsUser(user.accessToken);
         const { data: memberOk, error: memberErr } = await asUser.rpc("is_org_member", {
-          p_org_id: parsed.orgId,
+          p_org: parsed.orgId,
         });
         if (memberErr || memberOk !== true) return new Response("Forbidden", { status: 403 });
 
@@ -66,7 +66,11 @@ export const Route = createFileRoute("/api/query")({
         if (!conversationId) {
           const { data: conv, error: convErr } = await svc
             .from("conversations")
-            .insert({ org_id: parsed.orgId, source: "dashboard" })
+            .insert({
+              organization_id: parsed.orgId,
+              channel: "text",
+              started_by: user.userId,
+            })
             .select("id")
             .single();
           if (convErr) {
@@ -79,8 +83,9 @@ export const Route = createFileRoute("/api/query")({
         // Persist user message immediately.
         await svc.from("messages").insert({
           conversation_id: conversationId,
-          org_id: parsed.orgId,
+          organization_id: parsed.orgId,
           role: "user",
+          modality: "text",
           content: parsed.message,
         });
 
@@ -150,9 +155,11 @@ export const Route = createFileRoute("/api/query")({
                 .from("messages")
                 .insert({
                   conversation_id: conversationId,
-                  org_id: parsed.orgId,
+                  organization_id: parsed.orgId,
                   role: "assistant",
+                  modality: "text",
                   content: fullText,
+                  model: QUERY_MODEL,
                   latency_ms: latencyMs,
                 })
                 .select("id")
@@ -175,9 +182,9 @@ export const Route = createFileRoute("/api/query")({
                       meta.find((m) => m.key === "document_id")?.stringValue ?? null;
                     return {
                       message_id: msgRow.id,
-                      org_id: parsed.orgId,
+                      organization_id: parsed.orgId,
                       document_id: docId,
-                      source_title: rc.title ?? null,
+                      source_title: rc.title ?? "Untitled source",
                       snippet: rc.text ?? null,
                       page: rc.pageNumber ?? null,
                     };
@@ -188,7 +195,7 @@ export const Route = createFileRoute("/api/query")({
                   send({ type: "citations", rows });
                 }
               }
-              await svc.rpc("record_query_usage", { p_org_id: parsed.orgId });
+              await svc.rpc("record_query_usage", { p_org: parsed.orgId });
             } catch (e) {
               console.error("persist messages/citations/usage failed", e);
             }
