@@ -1,7 +1,8 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/app")({
-  beforeLoad: ({ context }) => {
+  beforeLoad: ({ context, location }) => {
+    if (location.pathname !== "/app") return;
     const orgs = (context as { session: { orgs: Array<{ slug: string }> } }).session.orgs;
     if (orgs.length === 0) {
       throw redirect({ to: "/onboarding" });

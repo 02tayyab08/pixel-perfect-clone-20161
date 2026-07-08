@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { createOrgFn, suggestSlugFn } from "@/lib/orgs.functions";
@@ -15,6 +15,7 @@ function OnboardingPage() {
   const createOrg = useServerFn(createOrgFn);
   const suggestSlug = useServerFn(suggestSlugFn);
   const navigate = useNavigate();
+  const router = useRouter();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
@@ -47,7 +48,11 @@ function OnboardingPage() {
         }
         return;
       }
-      navigate({ to: "/app/$slug", params: { slug: res.slug } });
+      await router.invalidate();
+      await navigate({ to: "/app/$slug", params: { slug: res.slug } });
+    } catch (err) {
+      console.error("Create organization failed", err);
+      setError(err instanceof Error ? err.message : "Could not create organization.");
     } finally {
       setLoading(false);
     }

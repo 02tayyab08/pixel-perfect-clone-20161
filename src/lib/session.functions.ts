@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getCurrentUser } from "./session.server";
+import { getCurrentUser, getSessionOrgs } from "./session.server";
 import { salniService } from "./supabase.server";
 
 export type SessionSummary = {
@@ -11,6 +11,7 @@ export const getSessionFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<SessionSummary> => {
     const user = await getCurrentUser();
     if (!user) return { user: null, orgs: [] };
+    const cookieOrgs = getSessionOrgs();
 
     const svc = salniService();
     // Read the user's org memberships via service role (schema-authoritative table names
@@ -23,7 +24,7 @@ export const getSessionFn = createServerFn({ method: "GET" }).handler(
 
     if (error) {
       console.error("getSessionFn: failed to load orgs", error);
-      return { user: { id: user.userId, email: user.email }, orgs: [] };
+      return { user: { id: user.userId, email: user.email }, orgs: cookieOrgs };
     }
 
     const orgs = (data ?? [])
@@ -40,6 +41,11 @@ export const getSessionFn = createServerFn({ method: "GET" }).handler(
       })
       .filter((v): v is NonNullable<typeof v> => v !== null);
 
-    return { user: { id: user.userId, email: user.email }, orgs };
+    const merged = [
+      ...orgs,
+      ...cookieOrgs.filter((cookieOrg) => !orgs.some((org) => org.slug === cookieOrg.slug)),
+    ];
+
+    return { user: { id: user.userId, email: user.email }, orgs: merged };
   },
 );
