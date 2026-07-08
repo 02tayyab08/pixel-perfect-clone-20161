@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
+import { toast } from "sonner";
 import { signInFn } from "@/lib/auth.functions";
 import { AuthShell } from "@/components/auth-shell";
 import { Button } from "@/components/ui/button";
@@ -28,9 +29,22 @@ function SignInPage() {
       const res = await signIn({ data: { email, password } });
       if (!res.ok) {
         setError(res.error);
+        toast.error(res.error || "Invalid login credentials");
         return;
       }
-      navigate({ to: "/app" });
+      try {
+        await navigate({ to: "/app" });
+      } catch (navErr) {
+        console.error("post sign-in navigation failed", navErr);
+        toast.error("Signed in, but navigation failed. Refreshing…");
+        if (typeof window !== "undefined") window.location.assign("/app");
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Something went wrong signing in.";
+      console.error("sign-in failed", err);
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
