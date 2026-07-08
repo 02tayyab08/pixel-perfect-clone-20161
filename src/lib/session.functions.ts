@@ -19,6 +19,7 @@ export const getSessionFn = createServerFn({ method: "GET" }).handler(
       .from("organization_members")
       .select("role, org:organizations(id, name, slug)")
       .eq("user_id", user.userId);
+    // schema: organization_members(organization_id, user_id, role) — join alias 'org' works via FK.
 
     if (error) {
       console.error("getSessionFn: failed to load orgs", error);
