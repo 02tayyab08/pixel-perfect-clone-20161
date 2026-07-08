@@ -37,14 +37,15 @@ export function setSessionCookie(payload: SessionPayload): void {
   setCookie(COOKIE_NAME, value, {
     path: "/",
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "none",
     secure: true,
+    partitioned: true,
     maxAge: COOKIE_MAX_AGE,
   });
 }
 
 export function clearSessionCookie(): void {
-  deleteCookie(COOKIE_NAME, { path: "/" });
+  deleteCookie(COOKIE_NAME, { path: "/", sameSite: "none", secure: true, partitioned: true });
 }
 
 export function readSessionCookieRaw(): SessionPayload | null {

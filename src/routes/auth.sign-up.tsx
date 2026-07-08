@@ -36,7 +36,10 @@ function SignUpPage() {
         setNotice("Check your inbox to confirm your email, then sign in.");
         return;
       }
-      navigate({ to: "/onboarding" });
+      await navigate({ to: "/onboarding" });
+    } catch (err) {
+      console.error("Sign-up submit failed", err);
+      setError("Account creation failed. Please try again.");
     } finally {
       setLoading(false);
     }
