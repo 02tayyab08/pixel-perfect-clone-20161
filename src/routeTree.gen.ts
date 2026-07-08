@@ -9,38 +9,203 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthSignUpRouteImport } from './routes/auth.sign-up'
+import { Route as AuthSignInRouteImport } from './routes/auth.sign-in'
+import { Route as ApiQueryRouteImport } from './routes/api/query'
+import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated.onboarding'
+import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.app'
+import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
+import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
+import { Route as AuthenticatedAppSlugIndexRouteImport } from './routes/_authenticated.app.$slug.index'
+import { Route as AuthenticatedAppSlugDocumentsRouteImport } from './routes/_authenticated.app.$slug.documents'
+import { Route as AuthenticatedAppSlugChatRouteImport } from './routes/_authenticated.app.$slug.chat'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthSignUpRoute = AuthSignUpRouteImport.update({
+  id: '/auth/sign-up',
+  path: '/auth/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthSignInRoute = AuthSignInRouteImport.update({
+  id: '/auth/sign-in',
+  path: '/auth/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiQueryRoute = ApiQueryRouteImport.update({
+  id: '/api/query',
+  path: '/api/query',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const ApiPublicProcessDocumentsRoute =
+  ApiPublicProcessDocumentsRouteImport.update({
+    id: '/api/public/process-documents',
+    path: '/api/public/process-documents',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AuthenticatedAppSlugRoute = AuthenticatedAppSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
+const AuthenticatedAppSlugIndexRoute =
+  AuthenticatedAppSlugIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAppSlugRoute,
+  } as any)
+const AuthenticatedAppSlugDocumentsRoute =
+  AuthenticatedAppSlugDocumentsRouteImport.update({
+    id: '/documents',
+    path: '/documents',
+    getParentRoute: () => AuthenticatedAppSlugRoute,
+  } as any)
+const AuthenticatedAppSlugChatRoute =
+  AuthenticatedAppSlugChatRouteImport.update({
+    id: '/chat',
+    path: '/chat',
+    getParentRoute: () => AuthenticatedAppSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/app': typeof AuthenticatedAppRouteWithChildren
+  '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/api/query': typeof ApiQueryRoute
+  '/auth/sign-in': typeof AuthSignInRoute
+  '/auth/sign-up': typeof AuthSignUpRoute
+  '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
+  '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
+  '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
+  '/app/$slug/': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/app': typeof AuthenticatedAppRouteWithChildren
+  '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/api/query': typeof ApiQueryRoute
+  '/auth/sign-in': typeof AuthSignInRoute
+  '/auth/sign-up': typeof AuthSignUpRoute
+  '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
+  '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
+  '/app/$slug': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
+  '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
+  '/api/query': typeof ApiQueryRoute
+  '/auth/sign-in': typeof AuthSignInRoute
+  '/auth/sign-up': typeof AuthSignUpRoute
+  '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
+  '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/_authenticated/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
+  '/_authenticated/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
+  '/_authenticated/app/$slug/': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/sitemap.xml'
+    | '/app'
+    | '/onboarding'
+    | '/api/query'
+    | '/auth/sign-in'
+    | '/auth/sign-up'
+    | '/app/$slug'
+    | '/api/public/process-documents'
+    | '/app/$slug/chat'
+    | '/app/$slug/documents'
+    | '/app/$slug/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/sitemap.xml'
+    | '/app'
+    | '/onboarding'
+    | '/api/query'
+    | '/auth/sign-in'
+    | '/auth/sign-up'
+    | '/api/public/process-documents'
+    | '/app/$slug/chat'
+    | '/app/$slug/documents'
+    | '/app/$slug'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/sitemap.xml'
+    | '/_authenticated/app'
+    | '/_authenticated/onboarding'
+    | '/api/query'
+    | '/auth/sign-in'
+    | '/auth/sign-up'
+    | '/_authenticated/app/$slug'
+    | '/api/public/process-documents'
+    | '/_authenticated/app/$slug/chat'
+    | '/_authenticated/app/$slug/documents'
+    | '/_authenticated/app/$slug/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiQueryRoute: typeof ApiQueryRoute
+  AuthSignInRoute: typeof AuthSignInRoute
+  AuthSignUpRoute: typeof AuthSignUpRoute
+  ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +213,128 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/sign-up': {
+      id: '/auth/sign-up'
+      path: '/auth/sign-up'
+      fullPath: '/auth/sign-up'
+      preLoaderRoute: typeof AuthSignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/sign-in': {
+      id: '/auth/sign-in'
+      path: '/auth/sign-in'
+      fullPath: '/auth/sign-in'
+      preLoaderRoute: typeof AuthSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/query': {
+      id: '/api/query'
+      path: '/api/query'
+      fullPath: '/api/query'
+      preLoaderRoute: typeof ApiQueryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/onboarding': {
+      id: '/_authenticated/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/app': {
+      id: '/_authenticated/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AuthenticatedAppRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/api/public/process-documents': {
+      id: '/api/public/process-documents'
+      path: '/api/public/process-documents'
+      fullPath: '/api/public/process-documents'
+      preLoaderRoute: typeof ApiPublicProcessDocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/app/$slug': {
+      id: '/_authenticated/app/$slug'
+      path: '/$slug'
+      fullPath: '/app/$slug'
+      preLoaderRoute: typeof AuthenticatedAppSlugRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/_authenticated/app/$slug/': {
+      id: '/_authenticated/app/$slug/'
+      path: '/'
+      fullPath: '/app/$slug/'
+      preLoaderRoute: typeof AuthenticatedAppSlugIndexRouteImport
+      parentRoute: typeof AuthenticatedAppSlugRoute
+    }
+    '/_authenticated/app/$slug/documents': {
+      id: '/_authenticated/app/$slug/documents'
+      path: '/documents'
+      fullPath: '/app/$slug/documents'
+      preLoaderRoute: typeof AuthenticatedAppSlugDocumentsRouteImport
+      parentRoute: typeof AuthenticatedAppSlugRoute
+    }
+    '/_authenticated/app/$slug/chat': {
+      id: '/_authenticated/app/$slug/chat'
+      path: '/chat'
+      fullPath: '/app/$slug/chat'
+      preLoaderRoute: typeof AuthenticatedAppSlugChatRouteImport
+      parentRoute: typeof AuthenticatedAppSlugRoute
+    }
   }
 }
 
+interface AuthenticatedAppSlugRouteChildren {
+  AuthenticatedAppSlugChatRoute: typeof AuthenticatedAppSlugChatRoute
+  AuthenticatedAppSlugDocumentsRoute: typeof AuthenticatedAppSlugDocumentsRoute
+  AuthenticatedAppSlugIndexRoute: typeof AuthenticatedAppSlugIndexRoute
+}
+
+const AuthenticatedAppSlugRouteChildren: AuthenticatedAppSlugRouteChildren = {
+  AuthenticatedAppSlugChatRoute: AuthenticatedAppSlugChatRoute,
+  AuthenticatedAppSlugDocumentsRoute: AuthenticatedAppSlugDocumentsRoute,
+  AuthenticatedAppSlugIndexRoute: AuthenticatedAppSlugIndexRoute,
+}
+
+const AuthenticatedAppSlugRouteWithChildren =
+  AuthenticatedAppSlugRoute._addFileChildren(AuthenticatedAppSlugRouteChildren)
+
+interface AuthenticatedAppRouteChildren {
+  AuthenticatedAppSlugRoute: typeof AuthenticatedAppSlugRouteWithChildren
+}
+
+const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
+  AuthenticatedAppSlugRoute: AuthenticatedAppSlugRouteWithChildren,
+}
+
+const AuthenticatedAppRouteWithChildren =
+  AuthenticatedAppRoute._addFileChildren(AuthenticatedAppRouteChildren)
+
+interface AuthenticatedRouteChildren {
+  AuthenticatedAppRoute: typeof AuthenticatedAppRouteWithChildren
+  AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAppRoute: AuthenticatedAppRouteWithChildren,
+  AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiQueryRoute: ApiQueryRoute,
+  AuthSignInRoute: AuthSignInRoute,
+  AuthSignUpRoute: AuthSignUpRoute,
+  ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
