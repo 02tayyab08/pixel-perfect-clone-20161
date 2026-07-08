@@ -9,7 +9,17 @@ import {
 } from "@/lib/documents.functions";
 import { retryWhileSetup } from "@/lib/retry-setup";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Upload } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Lightbulb,
+  RefreshCw,
+  Upload,
+  X,
+} from "lucide-react";
 
 type DocRow = {
   id: string;
@@ -42,6 +52,18 @@ function DocumentsPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const tipsKey = `salni.docs-tips-dismissed.${org.id}`;
+  const [tipsDismissed, setTipsDismissed] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(true);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setTipsDismissed(window.localStorage.getItem(tipsKey) === "1");
+    }
+  }, [tipsKey]);
+  const dismissTips = () => {
+    setTipsDismissed(true);
+    if (typeof window !== "undefined") window.localStorage.setItem(tipsKey, "1");
+  };
 
   const refresh = useCallback(async () => {
     const res = await listDocs({ data: { orgId: org.id } });
@@ -142,6 +164,49 @@ function DocumentsPage() {
         <Upload className="mx-auto h-6 w-6 text-muted-foreground" />
         <p className="mt-2 text-sm">Drag & drop files here, or click Upload above.</p>
       </div>
+
+      {!tipsDismissed ? (
+        <div className="mt-4 rounded-xl border border-border bg-accent/30 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setTipsOpen((v) => !v)}
+              className="flex items-center gap-2 text-sm font-medium"
+            >
+              <Lightbulb className="h-4 w-4 text-primary" />
+              Get the best answers from your documents
+              {tipsOpen ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={dismissTips}
+              aria-label="Dismiss tips"
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {tipsOpen ? (
+            <ul className="mt-3 list-disc space-y-1 pl-6 text-sm text-muted-foreground">
+              <li>
+                Use descriptive file names (e.g. &ldquo;Visa Renewal Process
+                2025.pdf&rdquo;, not &ldquo;Doc_final(1).pdf&rdquo;).
+              </li>
+              <li>Use clear headings inside documents for each topic.</li>
+              <li>
+                Where possible, keep one topic per document — several focused files
+                beat one giant mixed file.
+              </li>
+              <li>Text-based files work best; scanned image-only PDFs may index poorly.</li>
+              <li>Files up to 50 MB: PDF, Word, Excel, PowerPoint, TXT, MD, CSV.</li>
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       {settingUp ? (
         <div className="mt-4 flex items-center gap-2 rounded-md border border-border bg-accent/40 p-3 text-sm">
