@@ -177,8 +177,31 @@ export const createDocumentRowFn = createServerFn({ method: "POST" })
       .from(BUCKET)
       .createSignedUploadUrl(storagePath);
     if (signed.error || !signed.data) {
-      console.error("createSignedUploadUrl failed", signed.error);
-      return { ok: false, error: "Could not create upload URL" };
+      const err = signed.error as
+        | {
+            name?: string;
+            message?: string;
+            status?: number;
+            statusCode?: number | string;
+            error?: string;
+          }
+        | null;
+      console.error("createSignedUploadUrl failed (raw)", {
+        bucket: BUCKET,
+        storagePath,
+        name: err?.name,
+        message: err?.message,
+        status: err?.status,
+        statusCode: err?.statusCode,
+        error: err?.error,
+      });
+      const raw = [err?.name, err?.statusCode ?? err?.status, err?.error, err?.message]
+        .filter(Boolean)
+        .join(" | ");
+      return {
+        ok: false,
+        error: `createSignedUploadUrl failed: ${raw || "unknown error"}`,
+      };
     }
 
     return {
