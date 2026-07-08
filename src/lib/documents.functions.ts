@@ -56,14 +56,26 @@ export const createDocumentRowFn = createServerFn({ method: "POST" })
       return { ok: false, error: "Unsupported file type" };
     }
 
-    // Look up org store override, then ensure the shared store is ready.
-    const svc = salniService();
-    const { data: orgRow, error: orgErr } = await svc
+    // Resolve the org as the authenticated user so RLS applies. If the read
+    // fails with a Data API grant/permission error, log it verbatim so we can
+    // tell the operator which table needs to be exposed.
+    const asUser = salniAsUser(user.accessToken);
+    const orgRead = await asUser
       .from("organizations")
       .select("id, file_search_store_name, is_active")
       .eq("id", data.orgId)
       .maybeSingle();
-    if (orgErr || !orgRow) return { ok: false, error: "Organization not found" };
+    if (orgRead.error) {
+      console.error("createDocumentRow: organizations read failed", {
+        code: (orgRead.error as { code?: string }).code,
+        message: orgRead.error.message,
+        details: (orgRead.error as { details?: string }).details,
+        hint: (orgRead.error as { hint?: string }).hint,
+      });
+      return { ok: false, error: `Organization lookup failed: ${orgRead.error.message}` };
+    }
+    const orgRow = orgRead.data;
+    if (!orgRow) return { ok: false, error: "Organization not found" };
     if (orgRow.is_active === false)
       return { ok: false, error: "This assistant is currently unavailable." };
 
@@ -79,6 +91,7 @@ export const createDocumentRowFn = createServerFn({ method: "POST" })
     // Row-first insert. The trigger enforces the plan cap atomically.
     // storage_path uses the row id, so we let the DB generate the id and then
     // update the storage_path in the same round-trip.
+    const svc = salniService();
     const insert = await svc
       .from("documents")
       .insert({
