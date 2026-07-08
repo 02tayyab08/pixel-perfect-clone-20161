@@ -51,11 +51,12 @@ function ChatPage() {
     setSettingUp(false);
 
     if (!res.ok || !res.body) {
+      const bodyText = await res.text().catch(() => "");
       setMessages((m) => {
         const copy = [...m];
         copy[copy.length - 1] = {
           role: "assistant",
-          content: "Something went wrong. Please try again.",
+          content: `Error ${res.status}: ${bodyText || res.statusText || "no body"}`,
         };
         return copy;
       });
@@ -88,6 +89,8 @@ function ChatPage() {
             acc = obj.text;
           } else if (obj.type === "citations") {
             cits = obj.rows;
+          } else if (obj.type === "error") {
+            acc = `Error: ${obj.message}`;
           }
           setMessages((m) => {
             const copy = [...m];
