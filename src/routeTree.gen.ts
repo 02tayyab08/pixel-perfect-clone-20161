@@ -19,6 +19,8 @@ import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.ap
 import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
 import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
 import { Route as AuthenticatedAppSlugIndexRouteImport } from './routes/_authenticated.app.$slug.index'
+import { Route as AuthenticatedAppSlugDocumentsRouteImport } from './routes/_authenticated.app.$slug.documents'
+import { Route as AuthenticatedAppSlugChatRouteImport } from './routes/_authenticated.app.$slug.chat'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
@@ -71,6 +73,18 @@ const AuthenticatedAppSlugIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedAppSlugRoute,
   } as any)
+const AuthenticatedAppSlugDocumentsRoute =
+  AuthenticatedAppSlugDocumentsRouteImport.update({
+    id: '/documents',
+    path: '/documents',
+    getParentRoute: () => AuthenticatedAppSlugRoute,
+  } as any)
+const AuthenticatedAppSlugChatRoute =
+  AuthenticatedAppSlugChatRouteImport.update({
+    id: '/chat',
+    path: '/chat',
+    getParentRoute: () => AuthenticatedAppSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -81,6 +95,8 @@ export interface FileRoutesByFullPath {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
+  '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
   '/app/$slug/': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRoutesByTo {
@@ -91,6 +107,8 @@ export interface FileRoutesByTo {
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
+  '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
   '/app/$slug': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRoutesById {
@@ -104,6 +122,8 @@ export interface FileRoutesById {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/_authenticated/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
+  '/_authenticated/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
   '/_authenticated/app/$slug/': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRouteTypes {
@@ -117,6 +137,8 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/app/$slug'
     | '/api/public/process-documents'
+    | '/app/$slug/chat'
+    | '/app/$slug/documents'
     | '/app/$slug/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -127,6 +149,8 @@ export interface FileRouteTypes {
     | '/auth/sign-in'
     | '/auth/sign-up'
     | '/api/public/process-documents'
+    | '/app/$slug/chat'
+    | '/app/$slug/documents'
     | '/app/$slug'
   id:
     | '__root__'
@@ -139,6 +163,8 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/_authenticated/app/$slug'
     | '/api/public/process-documents'
+    | '/_authenticated/app/$slug/chat'
+    | '/_authenticated/app/$slug/documents'
     | '/_authenticated/app/$slug/'
   fileRoutesById: FileRoutesById
 }
@@ -223,14 +249,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppSlugIndexRouteImport
       parentRoute: typeof AuthenticatedAppSlugRoute
     }
+    '/_authenticated/app/$slug/documents': {
+      id: '/_authenticated/app/$slug/documents'
+      path: '/documents'
+      fullPath: '/app/$slug/documents'
+      preLoaderRoute: typeof AuthenticatedAppSlugDocumentsRouteImport
+      parentRoute: typeof AuthenticatedAppSlugRoute
+    }
+    '/_authenticated/app/$slug/chat': {
+      id: '/_authenticated/app/$slug/chat'
+      path: '/chat'
+      fullPath: '/app/$slug/chat'
+      preLoaderRoute: typeof AuthenticatedAppSlugChatRouteImport
+      parentRoute: typeof AuthenticatedAppSlugRoute
+    }
   }
 }
 
 interface AuthenticatedAppSlugRouteChildren {
+  AuthenticatedAppSlugChatRoute: typeof AuthenticatedAppSlugChatRoute
+  AuthenticatedAppSlugDocumentsRoute: typeof AuthenticatedAppSlugDocumentsRoute
   AuthenticatedAppSlugIndexRoute: typeof AuthenticatedAppSlugIndexRoute
 }
 
 const AuthenticatedAppSlugRouteChildren: AuthenticatedAppSlugRouteChildren = {
+  AuthenticatedAppSlugChatRoute: AuthenticatedAppSlugChatRoute,
+  AuthenticatedAppSlugDocumentsRoute: AuthenticatedAppSlugDocumentsRoute,
   AuthenticatedAppSlugIndexRoute: AuthenticatedAppSlugIndexRoute,
 }
 
