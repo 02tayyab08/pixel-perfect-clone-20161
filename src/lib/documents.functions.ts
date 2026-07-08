@@ -108,6 +108,12 @@ export const createDocumentRowFn = createServerFn({ method: "POST" })
 
     if (insert.error) {
       const msg = insert.error.message ?? "";
+      console.error("documents.insert failed (raw)", {
+        code: (insert.error as { code?: string }).code,
+        message: insert.error.message,
+        details: (insert.error as { details?: string }).details,
+        hint: (insert.error as { hint?: string }).hint,
+      });
       if (msg.includes(DOC_CAP_REACHED)) {
         // Try to enrich with plan name for a friendlier message.
         let planLabel = "your current plan";
@@ -143,7 +149,15 @@ export const createDocumentRowFn = createServerFn({ method: "POST" })
         };
       }
       console.error("documents.insert failed", insert.error);
-      return { ok: false, error: "Could not create document row" };
+      const raw = [
+        (insert.error as { code?: string }).code,
+        insert.error.message,
+        (insert.error as { details?: string }).details,
+        (insert.error as { hint?: string }).hint,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      return { ok: false, error: `documents.insert failed: ${raw}` };
     }
 
     const documentId = insert.data.id as string;
