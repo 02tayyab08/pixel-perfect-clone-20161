@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiQueryRouteImport } from './routes/api/query'
+import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,41 @@ const ApiQueryRoute = ApiQueryRouteImport.update({
   path: '/api/query',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicProcessDocumentsRoute =
+  ApiPublicProcessDocumentsRouteImport.update({
+    id: '/api/public/process-documents',
+    path: '/api/public/process-documents',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/query': typeof ApiQueryRoute
+  '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/query': typeof ApiQueryRoute
+  '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/query': typeof ApiQueryRoute
+  '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/query'
+  fullPaths: '/' | '/api/query' | '/api/public/process-documents'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/query'
-  id: '__root__' | '/' | '/api/query'
+  to: '/' | '/api/query' | '/api/public/process-documents'
+  id: '__root__' | '/' | '/api/query' | '/api/public/process-documents'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiQueryRoute: typeof ApiQueryRoute
+  ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +76,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiQueryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/process-documents': {
+      id: '/api/public/process-documents'
+      path: '/api/public/process-documents'
+      fullPath: '/api/public/process-documents'
+      preLoaderRoute: typeof ApiPublicProcessDocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiQueryRoute: ApiQueryRoute,
+  ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
