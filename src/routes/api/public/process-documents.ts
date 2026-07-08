@@ -16,7 +16,7 @@ function tsEqual(a: string, b: string): boolean {
 
 type ClaimedRow = {
   id: string;
-  org_id: string;
+  organization_id: string;
   file_name: string;
   mime_type: string | null;
   storage_path: string;
@@ -37,7 +37,7 @@ async function processOne(row: ClaimedRow) {
     await svc.rpc("update_document_status", {
       p_document_id: row.id,
       p_status: "failed",
-      p_file_search_document: null,
+      p_file_search_name: null,
       p_error: "oversize or missing object",
     });
     return;
@@ -49,7 +49,7 @@ async function processOne(row: ClaimedRow) {
     await svc.rpc("update_document_status", {
       p_document_id: row.id,
       p_status: "failed",
-      p_file_search_document: null,
+      p_file_search_name: null,
       p_error: `download failed: ${dl.error?.message ?? "unknown"}`,
     });
     return;
@@ -59,13 +59,13 @@ async function processOne(row: ClaimedRow) {
   const { data: org, error: orgErr } = await svc
     .from("organizations")
     .select("id, file_search_store_name")
-    .eq("id", row.org_id)
+    .eq("id", row.organization_id)
     .maybeSingle();
   if (orgErr || !org) {
     await svc.rpc("update_document_status", {
       p_document_id: row.id,
       p_status: "failed",
-      p_file_search_document: null,
+      p_file_search_name: null,
       p_error: "organization not found",
     });
     return;
@@ -98,7 +98,7 @@ async function processOne(row: ClaimedRow) {
         config: {
           displayName: row.file_name,
           customMetadata: [
-            { key: "org_id", stringValue: row.org_id },
+            { key: "org_id", stringValue: row.organization_id },
             { key: "document_id", stringValue: row.id },
           ],
         },
@@ -118,7 +118,7 @@ async function processOne(row: ClaimedRow) {
       await svc.rpc("update_document_status", {
         p_document_id: row.id,
         p_status: "ready",
-        p_file_search_document: resource,
+        p_file_search_name: resource,
         p_error: null,
       });
       return;
@@ -131,7 +131,7 @@ async function processOne(row: ClaimedRow) {
   await svc.rpc("update_document_status", {
     p_document_id: row.id,
     p_status: "failed",
-    p_file_search_document: null,
+    p_file_search_name: null,
     p_error: `gemini upload failed: ${(lastErr as Error)?.message ?? "unknown"}`,
   });
 }
@@ -161,7 +161,7 @@ export const Route = createFileRoute("/api/public/process-documents")({
         // Claim in a loop until empty.
         // Safety cap: 20 batches per invocation to avoid unbounded runtime.
         for (let batch = 0; batch < 20; batch++) {
-          const { data, error } = await svc.rpc("claim_queued_documents", { p_limit: 5 });
+          const { data, error } = await svc.rpc("claim_queued_documents", { p_batch: 5 });
           if (error) {
             console.error("claim_queued_documents failed", error);
             return new Response(JSON.stringify({ error: error.message }), {
