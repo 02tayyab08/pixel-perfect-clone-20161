@@ -2,12 +2,25 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Quote } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type ChatMsg = {
   role: "user" | "assistant";
   content: string;
-  citations?: Array<{ source_title: string | null; page: number | null; document_id: string | null }>;
+  citations?: Array<{
+    source_title: string | null;
+    page: number | null;
+    document_id: string | null;
+    snippet?: string | null;
+  }>;
 };
 
 export const Route = createFileRoute("/_authenticated/app/$slug/chat")({
@@ -22,6 +35,8 @@ function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [settingUp, setSettingUp] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [panel, setPanel] = useState<{ msgIdx: number; citIdx: number } | null>(null);
+  const isMobile = useIsMobile();
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -139,14 +154,19 @@ function ChatPage() {
             {m.citations && m.citations.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1">
                 {m.citations.map((c, j) => (
-                  <span
+                  <button
                     key={j}
-                    className="inline-flex items-center gap-1 rounded-md bg-background px-2 py-1 text-xs text-muted-foreground"
+                    type="button"
+                    onClick={() => setPanel({ msgIdx: i, citIdx: j })}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                    title={c.source_title ?? "source"}
                   >
-                    <Quote className="h-3 w-3" />
-                    {c.source_title ?? "source"}
-                    {c.page ? ` · p.${c.page}` : ""}
-                  </span>
+                    <span className="font-medium text-foreground">[{j + 1}]</span>
+                    <span className="max-w-[16rem] truncate">
+                      {c.source_title ?? "source"}
+                    </span>
+                    {c.page ? <span>· p.{c.page}</span> : null}
+                  </button>
                 ))}
               </div>
             ) : null}
@@ -170,6 +190,93 @@ function ChatPage() {
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
         </Button>
       </form>
+
+      <CitationPanel
+        open={panel !== null}
+        onOpenChange={(o) => !o && setPanel(null)}
+        side={isMobile ? "bottom" : "right"}
+        citations={panel ? messages[panel.msgIdx]?.citations ?? [] : []}
+        index={panel?.citIdx ?? 0}
+        onNavigate={(next) =>
+          setPanel((p) => (p ? { ...p, citIdx: next } : p))
+        }
+      />
     </div>
+  );
+}
+
+function CitationPanel({
+  open,
+  onOpenChange,
+  side,
+  citations,
+  index,
+  onNavigate,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  side: "right" | "bottom";
+  citations: NonNullable<ChatMsg["citations"]>;
+  index: number;
+  onNavigate: (next: number) => void;
+}) {
+  const cit = citations[index];
+  const total = citations.length;
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side={side}
+        className={side === "right" ? "w-full sm:max-w-lg" : "max-h-[80vh]"}
+      >
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <span className="rounded bg-primary/10 px-2 py-0.5 text-xs text-primary">
+              [{index + 1}] of {total}
+            </span>
+            <span className="truncate">{cit?.source_title ?? "Source"}</span>
+          </SheetTitle>
+          <SheetDescription>
+            {cit?.page ? `Page ${cit.page}` : "Cited excerpt from your documents"}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-4 px-4">
+          {cit?.snippet ? (
+            <blockquote
+              dir="auto"
+              className="border-l-4 border-primary/50 bg-muted/60 px-4 py-3 text-sm italic leading-relaxed text-foreground"
+            >
+              {cit.snippet}
+            </blockquote>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No snippet available for this citation.
+            </p>
+          )}
+        </div>
+
+        {total > 1 ? (
+          <div className="mt-6 flex items-center justify-between gap-2 px-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate((index - 1 + total) % total)}
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" /> Prev
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {index + 1} / {total}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate((index + 1) % total)}
+            >
+              Next <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+        ) : null}
+      </SheetContent>
+    </Sheet>
   );
 }
