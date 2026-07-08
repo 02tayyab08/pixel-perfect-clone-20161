@@ -30,7 +30,10 @@ function SignInPage() {
         setError(res.error);
         return;
       }
-      navigate({ to: "/app" });
+      await navigate({ to: "/app" });
+    } catch (err) {
+      console.error("Sign-in submit failed", err);
+      setError("Sign-in failed. Please try again.");
     } finally {
       setLoading(false);
     }
