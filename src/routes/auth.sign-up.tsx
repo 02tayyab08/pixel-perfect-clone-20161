@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { toast } from "sonner";
 import { signUpFn } from "@/lib/auth.functions";
 import { AuthShell } from "@/components/auth-shell";
 import { Button } from "@/components/ui/button";
@@ -31,25 +30,13 @@ function SignUpPage() {
       const res = await signUp({ data: { email, password } });
       if (!res.ok) {
         setError(res.error);
-        toast.error(res.error || "Sign up failed");
         return;
       }
       if (res.needsConfirmation) {
         setNotice("Check your inbox to confirm your email, then sign in.");
         return;
       }
-      try {
-        await navigate({ to: "/onboarding" });
-      } catch (navErr) {
-        console.error("post sign-up navigation failed", navErr);
-        if (typeof window !== "undefined") window.location.assign("/onboarding");
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong creating your account.";
-      console.error("sign-up failed", err);
-      setError(message);
-      toast.error(message);
+      navigate({ to: "/onboarding" });
     } finally {
       setLoading(false);
     }
