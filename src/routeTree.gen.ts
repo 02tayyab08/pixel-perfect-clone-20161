@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthSignUpRouteImport } from './routes/auth.sign-up'
 import { Route as AuthSignInRouteImport } from './routes/auth.sign-in'
+import { Route as ApiSessionRouteImport } from './routes/api/session'
 import { Route as ApiQueryRouteImport } from './routes/api/query'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated.onboarding'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.app'
@@ -45,6 +46,11 @@ const AuthSignUpRoute = AuthSignUpRouteImport.update({
 const AuthSignInRoute = AuthSignInRouteImport.update({
   id: '/auth/sign-in',
   path: '/auth/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSessionRoute = ApiSessionRouteImport.update({
+  id: '/api/session',
+  path: '/api/session',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiQueryRoute = ApiQueryRouteImport.update({
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/api/query': typeof ApiQueryRoute
+  '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/api/query': typeof ApiQueryRoute
+  '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/api/query': typeof ApiQueryRoute
+  '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
   '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/onboarding'
     | '/api/query'
+    | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
     | '/app/$slug'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/onboarding'
     | '/api/query'
+    | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
     | '/api/public/process-documents'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app'
     | '/_authenticated/onboarding'
     | '/api/query'
+    | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
     | '/_authenticated/app/$slug'
@@ -185,6 +197,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiQueryRoute: typeof ApiQueryRoute
+  ApiSessionRoute: typeof ApiSessionRoute
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
   ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
@@ -225,6 +238,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/sign-in'
       fullPath: '/auth/sign-in'
       preLoaderRoute: typeof AuthSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/session': {
+      id: '/api/session'
+      path: '/api/session'
+      fullPath: '/api/session'
+      preLoaderRoute: typeof ApiSessionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/query': {
@@ -331,6 +351,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiQueryRoute: ApiQueryRoute,
+  ApiSessionRoute: ApiSessionRoute,
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
   ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
