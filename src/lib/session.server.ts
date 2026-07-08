@@ -1,4 +1,4 @@
-import { getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
+import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
 import { verifyAccessToken } from "./supabase.server";
 
 const COOKIE_NAME = "salni_session";
@@ -34,39 +34,23 @@ function decode(raw: string): SessionPayload | null {
 
 export function setSessionCookie(payload: SessionPayload): void {
   const value = encode(payload);
-  const cookie = [
-    `${COOKIE_NAME}=${value}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    "Secure",
-    `Max-Age=${COOKIE_MAX_AGE}`,
-  ].join("; ");
-  setResponseHeader("Set-Cookie", cookie);
+  setCookie(COOKIE_NAME, value, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: true,
+    maxAge: COOKIE_MAX_AGE,
+  });
 }
 
 export function clearSessionCookie(): void {
-  setResponseHeader(
-    "Set-Cookie",
-    `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0`,
-  );
-}
-
-function readCookieHeader(): string | null {
-  return getRequestHeader("cookie") ?? null;
+  deleteCookie(COOKIE_NAME, { path: "/" });
 }
 
 export function readSessionCookieRaw(): SessionPayload | null {
-  const header = readCookieHeader();
-  if (!header) return null;
-  for (const part of header.split(/;\s*/)) {
-    const eq = part.indexOf("=");
-    if (eq < 0) continue;
-    if (part.slice(0, eq) === COOKIE_NAME) {
-      return decode(part.slice(eq + 1));
-    }
-  }
-  return null;
+  const raw = getCookie(COOKIE_NAME);
+  if (!raw) return null;
+  return decode(raw);
 }
 
 export type CurrentUser = {

@@ -47,7 +47,18 @@ export const signInFn = createServerFn({ method: "POST" })
       password: data.password,
     });
     if (error || !result.session) {
-      return { ok: false as const, error: error?.message ?? "Invalid credentials" };
+      console.error("signInFn: supabase error", {
+        message: error?.message,
+        status: (error as { status?: number } | null)?.status,
+        hasSession: !!result?.session,
+      });
+      const msg = error?.message ?? "Invalid credentials";
+      const friendly = /email not confirmed/i.test(msg)
+        ? "Please confirm your email address before signing in."
+        : /invalid login credentials/i.test(msg)
+          ? "Wrong email or password."
+          : msg;
+      return { ok: false as const, error: friendly };
     }
     const cookie = toSessionCookie(result.session);
     if (cookie) setSessionCookie(cookie);
