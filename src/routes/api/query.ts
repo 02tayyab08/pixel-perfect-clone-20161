@@ -16,6 +16,55 @@ const NOT_IN_DOCS = "I don't have that in the provided documents.";
 
 void isSetupInProgressPayload; // exported for client consumers of /api/query
 
+// Best-effort retrieval-term expansion. Never blocks or breaks an answer.
+async function expandQueryTerms(question: string): Promise<string | null> {
+  const TIMEOUT_MS = 800;
+  try {
+    const ai = gemini();
+    const prompt =
+      "Given a user question for a business knowledge assistant in the UAE, " +
+      "output 3–8 comma-separated retrieval keywords/synonyms covering domain " +
+      "terminology (e.g. 'hiring UAE nationals' → Emiratisation, local hiring " +
+      "quota, workforce nationalization). Output ONLY the comma-separated terms, " +
+      "nothing else.\n\nQuestion: " +
+      question;
+    const call = ai.models.generateContent({
+      model: "gemini-2.5-flash-lite",
+      contents: prompt,
+    });
+    const timeout = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), TIMEOUT_MS),
+    );
+    const res = await Promise.race([call, timeout]);
+    if (!res) {
+      console.log("[query-expansion] skipped: timeout");
+      return null;
+    }
+    const text = (res as { text?: string }).text?.trim() ?? "";
+    if (!text) {
+      console.log("[query-expansion] skipped: empty");
+      return null;
+    }
+    // Sanitize to one line of comma-separated terms.
+    const terms = text
+      .replace(/\n+/g, " ")
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 8)
+      .join(", ");
+    if (!terms) return null;
+    console.log("[query-expansion] terms=", terms);
+    return terms;
+  } catch (e) {
+    console.log(
+      "[query-expansion] skipped: error",
+      e instanceof Error ? e.message : String(e),
+    );
+    return null;
+  }
+}
+
 export const Route = createFileRoute("/api/query")({
   server: {
     handlers: {
@@ -120,9 +169,13 @@ export const Route = createFileRoute("/api/query")({
 
             try {
               const ai = gemini();
+              const terms = await expandQueryTerms(parsed.message);
+              const retrievalPrompt = terms
+                ? `${parsed.message}\n(Related terms to consider when searching the documents: ${terms})`
+                : parsed.message;
               const iter = await ai.models.generateContentStream({
                 model: QUERY_MODEL,
-                contents: parsed.message,
+                contents: retrievalPrompt,
                 config: {
                   systemInstruction:
                     org.system_instruction ||
