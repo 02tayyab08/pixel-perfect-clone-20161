@@ -31,7 +31,7 @@ const CreateDocSchema = z.object({
 
 async function assertOrgMember(userAccessToken: string, orgId: string): Promise<void> {
   const asUser = salniAsUser(userAccessToken);
-  const { data, error } = await asUser.rpc("is_org_member", { p_org_id: orgId });
+  const { data, error } = await asUser.rpc("is_org_member", { p_org: orgId });
   if (error) throw new Error(`is_org_member failed: ${error.message}`);
   if (data !== true) throw new Error("Forbidden");
 }
@@ -82,14 +82,13 @@ export const createDocumentRowFn = createServerFn({ method: "POST" })
     const insert = await svc
       .from("documents")
       .insert({
-        org_id: data.orgId,
+        organization_id: data.orgId,
+        uploaded_by: user.userId,
         file_name: data.fileName,
         mime_type: data.mimeType,
         size_bytes: data.size,
         status: "queued",
-        // storage_path is set below with the row id; column is NOT NULL, so use a temp
-        // path then update. If schema forbids that, we set with a client-generated uuid.
-        storage_path: `${data.orgId}/pending/${data.fileName}`,
+        // storage_path is nullable in the schema; we set it after the row id is known.
       })
       .select("id")
       .single();
@@ -103,7 +102,7 @@ export const createDocumentRowFn = createServerFn({ method: "POST" })
           const { data: planRow } = await svc
             .from("subscriptions")
             .select("plan:plans(name, doc_cap)")
-            .eq("org_id", data.orgId)
+            .eq("organization_id", data.orgId)
             .maybeSingle();
           const plan = (planRow as { plan?: { name?: string; doc_cap?: number } } | null)?.plan;
           if (plan?.name) planLabel = plan.name;
@@ -175,7 +174,7 @@ export const markDocumentUploadFailedFn = createServerFn({ method: "POST" })
     const { error } = await svc.rpc("update_document_status", {
       p_document_id: data.documentId,
       p_status: "failed",
-      p_file_search_document: null,
+      p_file_search_name: null,
       p_error: "upload failed",
     });
     if (error) return { ok: false as const, error: error.message };
@@ -190,8 +189,8 @@ export const listDocumentsFn = createServerFn({ method: "POST" })
     const asUser = salniAsUser(user.accessToken);
     const { data: rows, error } = await asUser
       .from("documents")
-      .select("id, file_name, mime_type, size_bytes, status, error, retry_count, created_at")
-      .eq("org_id", data.orgId)
+      .select("id, file_name, mime_type, size_bytes, status, error_message, retry_count, created_at")
+      .eq("organization_id", data.orgId)
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) return { ok: false as const, error: error.message, rows: [] as [] };
@@ -217,7 +216,7 @@ export const retryDocumentFn = createServerFn({ method: "POST" })
       .from("documents")
       .update({
         status: "queued",
-        error: null,
+        error_message: null,
         retry_count: (row.retry_count ?? 0) + 1,
       })
       .eq("id", data.documentId);
