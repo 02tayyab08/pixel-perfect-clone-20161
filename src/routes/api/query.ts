@@ -169,9 +169,13 @@ export const Route = createFileRoute("/api/query")({
 
             try {
               const ai = gemini();
+              const terms = await expandQueryTerms(parsed.message);
+              const retrievalPrompt = terms
+                ? `${parsed.message}\n(Related terms to consider when searching the documents: ${terms})`
+                : parsed.message;
               const iter = await ai.models.generateContentStream({
                 model: QUERY_MODEL,
-                contents: parsed.message,
+                contents: retrievalPrompt,
                 config: {
                   systemInstruction:
                     org.system_instruction ||
