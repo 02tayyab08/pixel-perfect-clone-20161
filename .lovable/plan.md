@@ -1,82 +1,59 @@
-## Salni V2.1 — Phase 1 Build Plan (rev 2)
+## Root cause
 
-Changes from rev 1: `bootstrapStore()` wait behavior and signed upload URL semantics tightened per your feedback.
+The post-login org read and the documents-page org resolution both bypass what should be an RLS-scoped, user-JWT read:
 
-### Architecture decisions (locked from your answers)
+- `src/routes/api/session.ts` and `src/lib/session.functions.ts` load `organization_members` with `salniService()` (service role). Service role bypasses RLS, so it never returns "permission denied", but it also masks the real problem: if the row/join really is invisible to the user's JWT, we won't know why. And your prior turn's log ("org membership reads were empty due to API permission denial") points at a Data API exposure/grant problem that service-role reads paper over — so onboarding gets re-shown because the merged list is empty for that user.
+- `src/routes/_authenticated.app.$slug.tsx` derives the org purely from `context.session.orgs`. When the session read returns `[]`, `beforeLoad` redirects to `/app` → `_authenticated.app.tsx` sees `orgs.length===0` → `/onboarding`. That's the "asks me to create an organization again" loop.
+- `src/lib/documents.functions.ts` `createDocumentRowFn` calls `svc.from("organizations").select(...).eq("id", data.orgId)` with service role. When `org.id` in the client-side session context is stale/missing, `data.orgId` is wrong and the row lookup returns `null` → "Organization not found". Also, the membership check `is_org_member` runs as the user — if the org read was faked from the cookie but the user isn't actually a member per RLS, `assertOrgMember` will throw.
 
-- Stack: TanStack Start on Cloudflare Workers. All "Edge Functions" become TanStack **server functions** (`createServerFn`) for authenticated dashboard calls, and **server routes** under `src/routes/api/public/*` for external triggers (cron ping, Storage webhook, and later the widget).
-- Backend: your existing Supabase Mumbai project. `SUPABASE_` is a reserved prefix in Lovable, so the three keys are stored as `SALNI_SUPABASE_URL`, `SALNI_SUPABASE_ANON_KEY`, `SALNI_SUPABASE_SERVICE_ROLE_KEY`. Schema/RPCs assumed deployed exactly per V2.1 — nothing altered.
-- Secrets already saved: `GEMINI_API_KEY`, `CRON_WEBHOOK_SECRET`, `IP_HASH_SALT`, plus the three `SALNI_SUPABASE_*`.
-- Gemini File Search via `@google/genai` with `GEMINI_API_KEY` directly. No Lovable AI Gateway.
-- Widget never opens Realtime. Dashboard uses Realtime for `documents` status only.
+Fix: run the user-facing reads as the authenticated user (`salniAsUser(user.accessToken)`), log the raw Supabase error, and — if the read actually returns `permission denied for table X` — surface which table needs Data API exposure/grants so you can enable it in the dashboard (no schema changes from us).
 
-### Deliverables in Phase 1
+## Changes
 
-1. **Supabase clients** (server-only, `*.server.ts`):
-   - `salniAnon()` — anon key, validates user bearer JWT.
-   - `salniService()` — service role, all privileged DB/Storage work.
-   - `salniAsUser(jwt)` — anon key + user JWT for RLS-scoped reads.
-   Browser never sees any Supabase key or client.
+### 1. `src/lib/session.functions.ts` — read orgs as the user
 
-2. **Auth** (email/password via Supabase Auth):
-   - Routes: `/auth/sign-in`, `/auth/sign-up`, `/auth/callback`.
-   - Session as httpOnly cookie set by a server fn; `/api/session` returns `{ userId, email, orgs }`.
-   - `_authenticated` layout gates the dashboard.
+- Replace `salniService()` with `salniAsUser(user.accessToken)`.
+- Query: `.from("organization_members").select("role, organization_id, org:organizations(id, name, slug)").eq("user_id", user.userId)`.
+- On error, `console.error("getSessionFn orgs read failed", { code, message, details, hint })` including the PostgREST `hint` (this is what tells you "permission denied for table organizations" vs "…organization_members").
+- Do NOT merge cookie orgs when the DB read succeeds with `[]` — only fall back to cookie orgs when the read errored. An empty successful read means "genuinely no memberships", so onboarding is correct.
+- Normalize the join whether Supabase returns `org` as an object or a single-element array (types already handle both).
 
-3. **Onboarding** (`/onboarding`):
-   - Form: org name + slug (auto-suggested).
-   - Server fn calls `create_organization(name, slug)`. Slug-taken → suggestions (`slug-2`, `slug-3`, …).
-   - On success, route to `/app/[slug]`.
+### 2. `src/routes/api/session.ts` — same change
 
-4. **Store bootstrap** — `bootstrapStore()` server helper, called lazily before first upload/query:
-   - Call `claim_store_bootstrap()`.
-   - `ready` → return `store_name`.
-   - `claimed` → create Gemini File Search store `salni-shared-v1` via `@google/genai`, then `finalize_store_bootstrap(name)`, return the name.
-   - `wait` → **sleep 1s, re-call `claim_store_bootstrap()` once**. If still `wait` (or `claimed` from another worker not yet finalized), **throw `SetupInProgressError` → HTTP 409** with body `{ error: "setup_in_progress", retry_after_ms: 2000 }`. No long polling on the server; the client owns the wait UX.
-   - Per-org override: if `organizations.file_search_store_name` non-null, use it and skip the shared bootstrap entirely.
+Mirror the above (user-JWT client, same logging, same "only fall back on error" rule). This is the endpoint the sign-in page hits to decide where to route.
 
-5. **Row-first upload** (`/app/[slug]/documents`):
-   - Client validates type + ≤50 MB; optional `can_upload_document` pre-check.
-   - Server fn `createDocumentRow({ orgId, fileName, mimeType, size })`:
-     1. Ensures store is ready via `bootstrapStore()` (may 409 — see below).
-     2. Inserts `documents` row (`queued`, `storage_path = <org_id>/<document_id>/<file_name>`). Trigger errors `DOC_CAP_REACHED` → friendly cap message with plan name; `DOC_CAP_NO_PLAN` → support-contact error.
-     3. **Only after the insert succeeds**, mints a **60-second signed upload URL** for that exact `storage_path` via the service-role client, and returns `{ documentId, storagePath, uploadUrl, uploadUrlExpiresAt }`.
-   - Client PUTs the file to the signed URL within 60s. Upload failure → server fn `markDocumentUploadFailed(id)` sets row `failed` with "upload failed" (retryable).
-   - **409 handling on the client:** the upload initiator (and the query client, below) catches HTTP 409 `setup_in_progress`, shows an inline "Setting up your workspace…" state (spinner + subtext), and retries the same server fn after `retry_after_ms` with jittered backoff up to ~30 s total, then surfaces "Still preparing your workspace — please retry in a moment" as a non-blocking notice. No error toast, no console error.
-   - Realtime subscription in the dashboard on `documents` for live status.
+### 3. `src/routes/auth.sign-in.tsx` — respect the real org list
 
-6. **`process-documents` route** — `src/routes/api/public/process-documents.ts` (POST):
-   - Cron path: header `x-cron-secret` must equal `CRON_WEBHOOK_SECRET`, else 401. Never uses the service key for authn.
-   - Storage-webhook path: validate the Supabase-issued webhook signature header (HMAC over raw body, timing-safe compare). If your project isn't sending signed webhooks yet, the cron path fully covers the flow within 5 min.
-   - Loop: `claim_queued_documents(5)` until empty.
-   - Per doc: re-check Storage object size (>50 MB or missing → `update_document_status(id,'failed',null,'oversize or missing object')`); download; `ai.files.upload` into the store with `displayName` = file name and `customMetadata: [{key:'org_id',stringValue}, {key:'document_id',stringValue}]`; poll op; `update_document_status → 'ready'` (+ resource name) or `'failed'` (+ error).
-   - Try/catch with exponential backoff on transient Gemini errors.
+Already navigates to the first org's slug when `/api/session` returns one — keep that, no logic change beyond confirming the code path works once (1)/(2) return real data.
 
-7. **Query server route** — `src/routes/api/public/query.ts` (POST) and a `queryAsMember` server fn for the dashboard. Both share the gate chain (widget wiring itself is Phase 2):
-   - Ensure store ready via `bootstrapStore()` — same 409 contract; client polls with the same "setting up your workspace" state.
-   - Resolve org (slug for widget, membership for dashboard). `is_active=false` → "This assistant is currently unavailable."
-   - Widget only: `allowed_domains` origin check.
-   - Widget only, in order: `check_rate_limit(org,'ref:'+end_user_ref,20)` → `check_org_hourly_ceiling(org,300)` → `check_rate_limit(org,'ip:'+sha256(ip+IP_HASH_SALT),120)`. Any false → high-demand reply.
-   - `generateContent` on `gemini-2.5-flash` with `tools:[{fileSearch:{fileSearchStoreNames:[store], metadataFilter:'org_id="<uuid>"'}}]` and org `system_instruction`. **`org_id` in `metadataFilter` is resolved server-side; any org id in the client payload is discarded.**
-   - Stream tokens (SSE). Persist `messages` (tokens + latency), parse `groundingMetadata.groundingChunks[]`, link each via `customMetadata.document_id` → `documents.id`, insert `citations`. Call `record_query_usage(org)`.
-   - Grounding miss → literal `"I don't have that in the provided documents."`. Gemini 429/5xx → backoff → friendly fallback.
+### 4. `src/lib/documents.functions.ts` — resolve org as the user, and log
 
-8. **Design system baseline** (only what Phase 1 needs to not look like a template):
-   - Semantic tokens in `src/styles.css`: neutral palette + one restrained accent (deep teal `oklch(0.55 0.09 195)`); serif display (Fraunces) + sans body (Inter); IBM Plex Arabic loaded via `<link>` in `__root.tsx` head (used by AR later).
-   - Real head metadata (title "Salni — AI Knowledge Assistant", description, og/twitter tags). Sitemap + robots at end of Phase 1.
+- `createDocumentRowFn`: switch the `organizations` lookup from `salniService()` to `salniAsUser(user.accessToken)` (RLS should already let a member `SELECT` their org). Log the raw error on failure. Keep `assertOrgMember` (RPC `is_org_member`) as the authoritative membership check.
+- Keep the `documents` insert and `storage_path` update on service role (that's how the DB trigger cap-gate is designed and how signed upload URLs are minted). Not touching that.
+- If the `organizations` read returns `permission denied`, report the exact table + hint back to you rather than silently switching to service role.
 
-### Explicitly NOT in Phase 1
+### 5. `src/lib/session.server.ts` — stop trusting cookie orgs to bypass routing
 
-Widget (`/embed/:slug`), lead capture UI, deletion Edge Function, compliance pages, audit wiring beyond obvious document events, EN/AR toggle in the widget, team invites. Those are Phase 2/3.
+- Keep `addSessionOrg` (still useful right after `create_organization` before the next request lands), but the routing decision in `_authenticated.app.tsx` must be driven by the DB read, not the cookie. No code change here — just documented — the routing fix comes from (1)/(2) returning authoritative results.
 
-### Technical / risk notes
+### 6. Diagnostics run (no code, one-shot)
 
-- I cannot verify the Mumbai schema, RPCs, `documents` bucket, or cron from here. If a call errors with "function does not exist" / "relation does not exist", I stop and report — I will NOT create replacement schema.
-- `@supabase/supabase-js` and `@google/genai` both run on the Worker under `nodejs_compat`. All Supabase clients live in `*.server.ts`.
-- `SetupInProgressError` is a shared server-side class; the server route returns `Response.json({error:'setup_in_progress',retry_after_ms:2000},{status:409, headers:{'Retry-After':'2'}})`, and the server-fn variant maps to the same shape via a typed return so `useServerFn` callers can `switch` on it.
+After the edits, in the running app I'll:
+- Hit `/api/session` while signed in and read the server logs for the raw Supabase error.
+- If logs show `permission denied for table organization_members` or `…organizations`, I'll stop and tell you exactly which table + which role (`authenticated`) needs `GRANT SELECT` in the Data API — you enable it in the Supabase dashboard, no migration from me.
+- If logs show the read succeeds and returns rows, verify sign-in lands on `/app/[slug]`, refresh persists, and an upload reaches `queued`.
 
-### Checkpoint report at end of Phase 1
+## Files touched
 
-I'll report which of acceptance criteria 1–4 and (partially) 5, 10 pass, and flag anything stubbed.
+- `src/lib/session.functions.ts`
+- `src/routes/api/session.ts`
+- `src/lib/documents.functions.ts`
 
-Reply "go" to build Phase 1, or edit any of the above first.
+No schema/migration changes. No service-role workaround for user-facing reads.
+
+## Verification checklist
+
+1. Sign in with existing account → `/api/session` returns `orgs: [{...}]` → redirected straight to `/app/<slug>`.
+2. Hard refresh on `/app/<slug>/documents` → stays signed in, org resolves, no `/onboarding` bounce.
+3. Upload a file → `createDocumentRowFn` returns `ok:true` with `documentId` + signed URL → row status `queued`.
+4. If any Data API grant is missing, report the exact table + role instead of patching around it.
