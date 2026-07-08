@@ -58,7 +58,9 @@ export const Route = createFileRoute("/api/query")({
               headers: { "content-type": "application/json", "Retry-After": "2" },
             });
           }
-          throw e;
+          const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+          console.error("bootstrapStore failed (raw)", e);
+          return new Response(`bootstrapStore failed: ${msg}`, { status: 500 });
         }
 
         // Ensure a conversation exists.
@@ -75,7 +77,15 @@ export const Route = createFileRoute("/api/query")({
             .single();
           if (convErr) {
             console.error("conversations.insert failed", convErr);
-            return new Response("Server Error", { status: 500 });
+            const raw = [
+              (convErr as { code?: string }).code,
+              convErr.message,
+              (convErr as { details?: string }).details,
+              (convErr as { hint?: string }).hint,
+            ]
+              .filter(Boolean)
+              .join(" | ");
+            return new Response(`conversations.insert failed: ${raw}`, { status: 500 });
           }
           conversationId = conv.id as string;
         }
@@ -134,11 +144,15 @@ export const Route = createFileRoute("/api/query")({
                 if (gm?.groundingChunks) groundingChunks = gm.groundingChunks;
               }
             } catch (e) {
-              console.error("gemini.generateContentStream failed", e);
-              const fallback =
-                "Something went wrong reaching the assistant. Please try again in a moment.";
-              send({ type: "delta", text: fallback });
-              fullText = fallback;
+              console.error("gemini.generateContentStream failed (raw)", e);
+              const err = e as { name?: string; message?: string; status?: number };
+              const raw = [err?.name, err?.status, err?.message]
+                .filter(Boolean)
+                .join(" | ");
+              const msg = `gemini.generateContentStream failed: ${raw || "unknown"}`;
+              send({ type: "error", message: msg });
+              send({ type: "delta", text: msg });
+              fullText = msg;
             }
 
             const latencyMs = Date.now() - startedAt;
