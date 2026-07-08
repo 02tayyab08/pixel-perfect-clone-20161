@@ -20,7 +20,6 @@ import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.app'
 import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
 import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
-import { Route as AuthenticatedAppSlugIndexRouteImport } from './routes/_authenticated.app.$slug.index'
 import { Route as AuthenticatedAppSlugDocumentsRouteImport } from './routes/_authenticated.app.$slug.documents'
 import { Route as AuthenticatedAppSlugChatRouteImport } from './routes/_authenticated.app.$slug.chat'
 
@@ -79,12 +78,6 @@ const AuthenticatedAppSlugRoute = AuthenticatedAppSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
-const AuthenticatedAppSlugIndexRoute =
-  AuthenticatedAppSlugIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedAppSlugRoute,
-  } as any)
 const AuthenticatedAppSlugDocumentsRoute =
   AuthenticatedAppSlugDocumentsRouteImport.update({
     id: '/documents',
@@ -111,7 +104,6 @@ export interface FileRoutesByFullPath {
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
-  '/app/$slug/': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -122,10 +114,10 @@ export interface FileRoutesByTo {
   '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
+  '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
-  '/app/$slug': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -142,7 +134,6 @@ export interface FileRoutesById {
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/_authenticated/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/_authenticated/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
-  '/_authenticated/app/$slug/': typeof AuthenticatedAppSlugIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -159,7 +150,6 @@ export interface FileRouteTypes {
     | '/api/public/process-documents'
     | '/app/$slug/chat'
     | '/app/$slug/documents'
-    | '/app/$slug/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -170,10 +160,10 @@ export interface FileRouteTypes {
     | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
+    | '/app/$slug'
     | '/api/public/process-documents'
     | '/app/$slug/chat'
     | '/app/$slug/documents'
-    | '/app/$slug'
   id:
     | '__root__'
     | '/'
@@ -189,7 +179,6 @@ export interface FileRouteTypes {
     | '/api/public/process-documents'
     | '/_authenticated/app/$slug/chat'
     | '/_authenticated/app/$slug/documents'
-    | '/_authenticated/app/$slug/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -282,13 +271,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppSlugRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
-    '/_authenticated/app/$slug/': {
-      id: '/_authenticated/app/$slug/'
-      path: '/'
-      fullPath: '/app/$slug/'
-      preLoaderRoute: typeof AuthenticatedAppSlugIndexRouteImport
-      parentRoute: typeof AuthenticatedAppSlugRoute
-    }
     '/_authenticated/app/$slug/documents': {
       id: '/_authenticated/app/$slug/documents'
       path: '/documents'
@@ -309,13 +291,11 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedAppSlugRouteChildren {
   AuthenticatedAppSlugChatRoute: typeof AuthenticatedAppSlugChatRoute
   AuthenticatedAppSlugDocumentsRoute: typeof AuthenticatedAppSlugDocumentsRoute
-  AuthenticatedAppSlugIndexRoute: typeof AuthenticatedAppSlugIndexRoute
 }
 
 const AuthenticatedAppSlugRouteChildren: AuthenticatedAppSlugRouteChildren = {
   AuthenticatedAppSlugChatRoute: AuthenticatedAppSlugChatRoute,
   AuthenticatedAppSlugDocumentsRoute: AuthenticatedAppSlugDocumentsRoute,
-  AuthenticatedAppSlugIndexRoute: AuthenticatedAppSlugIndexRoute,
 }
 
 const AuthenticatedAppSlugRouteWithChildren =
@@ -359,13 +339,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

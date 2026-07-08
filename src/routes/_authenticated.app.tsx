@@ -1,4 +1,4 @@
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, redirect, useLocation } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/app")({
   beforeLoad: ({ context }) => {
@@ -6,14 +6,14 @@ export const Route = createFileRoute("/_authenticated/app")({
     if (orgs.length === 0) {
       throw redirect({ to: "/onboarding" });
     }
-    if (orgs.length === 1) {
-      throw redirect({ to: "/app/$slug", params: { slug: orgs[0].slug } });
-    }
   },
   component: OrgChooser,
 });
 
 function OrgChooser() {
+  const location = useLocation();
+  if (location.pathname !== "/app") return <Outlet />;
+
   const { session } = Route.useRouteContext() as {
     session: { orgs: Array<{ id: string; name: string; slug: string }> };
   };

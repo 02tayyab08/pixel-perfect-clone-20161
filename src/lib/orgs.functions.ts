@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireCurrentUser } from "./session.server";
+import { addSessionOrg, requireCurrentUser } from "./session.server";
 import { salniAsUser, salniService } from "./supabase.server";
 
 const SlugSchema = z
@@ -73,6 +73,10 @@ export const createOrgFn = createServerFn({ method: "POST" })
       orgId = (rec as { id?: string; org_id?: string })?.id ??
         (rec as { id?: string; org_id?: string })?.org_id ??
         null;
+    }
+
+    if (orgId) {
+      addSessionOrg({ id: orgId, name: data.name, slug: data.slug, role: "owner" });
     }
 
     return { ok: true as const, orgId, slug: data.slug } as const;

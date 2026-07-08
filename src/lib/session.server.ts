@@ -9,6 +9,7 @@ type SessionPayload = {
   access_token: string;
   refresh_token: string;
   expires_at: number; // unix seconds
+  orgs?: Array<{ id: string; name: string; slug: string; role: string }>;
 };
 
 function encode(payload: SessionPayload): string {
@@ -42,6 +43,21 @@ export function setSessionCookie(payload: SessionPayload): void {
     partitioned: true,
     maxAge: COOKIE_MAX_AGE,
   });
+}
+
+export function addSessionOrg(org: { id: string; name: string; slug: string; role: string }): void {
+  const payload = readSessionCookieRaw();
+  if (!payload) return;
+  const orgs = payload.orgs ?? [];
+  setSessionCookie({
+    ...payload,
+    orgs: [...orgs.filter((item) => item.slug !== org.slug && item.id !== org.id), org],
+  });
+}
+
+export function getSessionOrgs(): Array<{ id: string; name: string; slug: string; role: string }> {
+  const payload = readSessionCookieRaw();
+  return payload?.orgs ?? [];
 }
 
 export function clearSessionCookie(): void {

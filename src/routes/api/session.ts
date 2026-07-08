@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getCurrentUser } from "@/lib/session.server";
+import { getCurrentUser, getSessionOrgs } from "@/lib/session.server";
 import { salniService } from "@/lib/supabase.server";
 
 export const Route = createFileRoute("/api/session")({
@@ -10,6 +10,7 @@ export const Route = createFileRoute("/api/session")({
         if (!user) {
           return Response.json({ userId: null, email: null, orgs: [] }, { status: 401 });
         }
+        const cookieOrgs = getSessionOrgs();
 
         const svc = salniService();
         const { data, error } = await svc
@@ -19,7 +20,7 @@ export const Route = createFileRoute("/api/session")({
 
         if (error) {
           console.error("/api/session: failed to load orgs", error);
-          return Response.json({ userId: user.userId, email: user.email, orgs: [] });
+          return Response.json({ userId: user.userId, email: user.email, orgs: cookieOrgs });
         }
 
         const orgs = (data ?? [])
@@ -36,7 +37,12 @@ export const Route = createFileRoute("/api/session")({
           })
           .filter((v): v is { id: string; name: string; slug: string; role: string } => v !== null);
 
-        return Response.json({ userId: user.userId, email: user.email, orgs });
+        const merged = [
+          ...orgs,
+          ...cookieOrgs.filter((cookieOrg) => !orgs.some((org) => org.slug === cookieOrg.slug)),
+        ];
+
+        return Response.json({ userId: user.userId, email: user.email, orgs: merged });
       },
     },
   },

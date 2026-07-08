@@ -21,6 +21,11 @@ function DashboardShell() {
   };
   const signOut = useServerFn(signOutFn);
   const matchRoute = useMatchRoute();
+  const isDocuments = !!matchRoute({
+    to: "/app/$slug/documents",
+    params: { slug: org.slug },
+  });
+  const isChat = !!matchRoute({ to: "/app/$slug/chat", params: { slug: org.slug } });
 
   const nav = [
     { to: "/app/$slug", label: "Overview", icon: LayoutDashboard, end: true },
@@ -80,10 +85,56 @@ function DashboardShell() {
             </Button>
           </div>
         </aside>
-        <main className="p-8">
-          <Outlet />
-        </main>
+        <main className="p-8">{isDocuments || isChat ? <Outlet /> : <Overview org={org} />}</main>
       </div>
+    </div>
+  );
+}
+
+function Overview({ org }: { org: { name: string; slug: string } }) {
+  const steps = [
+    {
+      title: "Upload documents",
+      body: "Add PDFs, Word docs, spreadsheets, or menus. Up to 50 MB per file.",
+      to: "/app/$slug/documents" as const,
+    },
+    {
+      title: "Wait for indexing",
+      body: "Salni indexes your documents securely — usually within a minute.",
+    },
+    {
+      title: "Ask a question",
+      body: "Try your assistant in the chat playground. Every answer is cited.",
+      to: "/app/$slug/chat" as const,
+    },
+  ];
+
+  return (
+    <div>
+      <h1 className="font-display text-3xl font-semibold">Welcome to {org.name}</h1>
+      <p className="mt-2 text-muted-foreground">Three steps to your first grounded answer.</p>
+      <ol className="mt-8 grid gap-4 md:grid-cols-3">
+        {steps.map((step, index) => {
+          const content = (
+            <div className="h-full rounded-2xl border border-border bg-card p-6 transition-colors hover:border-primary">
+              <p className="text-xs font-medium text-muted-foreground">Step {index + 1}</p>
+              <h3 className="mt-2 font-display text-lg font-semibold">{step.title}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{step.body}</p>
+            </div>
+          );
+          return (
+            <li key={step.title}>
+              {step.to ? (
+                <Link to={step.to} params={{ slug: org.slug }} className="block h-full">
+                  {content}
+                </Link>
+              ) : (
+                content
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
