@@ -16,8 +16,8 @@ type DocRow = {
   file_name: string;
   mime_type: string | null;
   size_bytes: number | null;
-  status: "queued" | "processing" | "ready" | "failed" | string;
-  error: string | null;
+  status: "queued" | "indexing" | "ready" | "failed" | string;
+  error_message: string | null;
   retry_count: number | null;
   created_at: string;
 };
@@ -178,7 +178,7 @@ function DocumentsPage() {
               <tr key={r.id} className="border-t border-border">
                 <td className="px-4 py-3 font-medium">{r.file_name}</td>
                 <td className="px-4 py-3">
-                  <StatusPill status={r.status} error={r.error} />
+                  <StatusPill status={r.status} error={r.error_message} />
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{formatBytes(r.size_bytes)}</td>
                 <td className="px-4 py-3 text-right">
@@ -224,7 +224,7 @@ function StatusPill({ status, error }: { status: string; error: string | null })
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-      <Loader2 className="h-3 w-3 animate-spin" /> {status === "processing" ? "Processing" : "Queued"}
+      <Loader2 className="h-3 w-3 animate-spin" /> {status === "indexing" ? "Indexing" : "Queued"}
     </span>
   );
 }
