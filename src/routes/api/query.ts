@@ -8,7 +8,7 @@ import { SetupInProgressError, isSetupInProgressPayload } from "@/lib/errors";
 
 const BodySchema = z.object({
   orgId: z.string().uuid(),
-  conversationId: z.string().uuid().optional(),
+  conversationId: z.string().uuid().nullish(),
   message: z.string().min(1).max(4000),
 });
 
@@ -27,7 +27,14 @@ export const Route = createFileRoute("/api/query")({
         try {
           parsed = BodySchema.parse(await request.json());
         } catch (e) {
-          return new Response("Bad Request", { status: 400 });
+          const msg =
+            e instanceof z.ZodError
+              ? JSON.stringify(e.issues)
+              : e instanceof Error
+                ? e.message
+                : String(e);
+          console.error("query BodySchema.parse failed (raw)", msg);
+          return new Response(`Bad Request: ${msg}`, { status: 400 });
         }
 
         // Verify org membership using the user's JWT (RLS).

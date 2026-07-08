@@ -36,7 +36,11 @@ function ChatPage() {
       fetch("/api/query", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orgId: org.id, conversationId, message: text }),
+        body: JSON.stringify({
+          orgId: org.id,
+          message: text,
+          ...(conversationId ? { conversationId } : {}),
+        }),
       });
 
     let res = await doRequest();
