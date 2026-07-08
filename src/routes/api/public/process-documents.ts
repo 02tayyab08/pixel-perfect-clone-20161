@@ -104,22 +104,16 @@ async function processOne(row: ClaimedRow) {
         },
       });
 
-      // Poll operation to completion.
-      let current = op;
-      let iters = 0;
-      while (!current.done && iters < 120) {
+      // Poll operation to completion (up to ~2 min).
+      let current = op as { done?: boolean; response?: { name?: string } };
+      for (let iters = 0; iters < 120 && !current.done; iters++) {
         await sleep(1000);
-        current = await ai.operations.getVideosOperation
-          ? // Fallback shouldn't be needed; use generic operations.get if available.
-            await (ai as unknown as { operations: { get: (o: unknown) => Promise<typeof op> } })
-              .operations.get(current)
-          : current;
-        iters++;
-        if ((current as { done?: boolean }).done) break;
+        current = (await ai.operations.get({
+          operation: current as never,
+        })) as typeof current;
       }
 
-      const resource =
-        (current as { response?: { name?: string } }).response?.name ?? null;
+      const resource = current.response?.name ?? null;
 
       await svc.rpc("update_document_status", {
         p_document_id: row.id,
