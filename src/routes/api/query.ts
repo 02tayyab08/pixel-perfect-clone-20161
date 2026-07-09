@@ -172,39 +172,42 @@ export const Route = createFileRoute("/api/query")({
 
             try {
               const ai = gemini();
-              // [query-diag-ping]: one non-streaming call with a trivial prompt
-              // and no tools. This surfaces the real upstream HTTP status the
-              // streamer hides behind "Incomplete JSON segment at the end".
-              try {
-                const pingStart = Date.now();
-                const pingRes = await ai.models.generateContent({
-                  model: QUERY_MODEL,
-                  contents: "ping",
-                });
-                const pingText = (pingRes as { text?: string }).text ?? "";
-                console.log(
-                  `[query-diag-ping] ok latency=${Date.now() - pingStart}ms textLen=${pingText.length}`,
-                );
-              } catch (pe) {
-                const err = pe as {
-                  name?: string;
-                  message?: string;
-                  status?: number;
-                  code?: number | string;
-                };
-                let dump = "";
+              // [query-diag-ping]: gated off by default. Only enable when
+              // explicitly needed for upstream HTTP diagnostics; otherwise it
+              // doubles Gemini calls per question in production.
+              const DIAG_PING = process.env.QUERY_DIAG_PING === "true";
+              if (DIAG_PING) {
                 try {
-                  dump = JSON.stringify(pe, Object.getOwnPropertyNames(pe)).slice(
-                    0,
-                    4000,
+                  const pingStart = Date.now();
+                  const pingRes = await ai.models.generateContent({
+                    model: QUERY_MODEL,
+                    contents: "ping",
+                  });
+                  const pingText = (pingRes as { text?: string }).text ?? "";
+                  console.log(
+                    `[query-diag-ping] ok latency=${Date.now() - pingStart}ms textLen=${pingText.length}`,
                   );
-                } catch {
-                  dump = String(pe).slice(0, 4000);
+                } catch (pe) {
+                  const err = pe as {
+                    name?: string;
+                    message?: string;
+                    status?: number;
+                    code?: number | string;
+                  };
+                  let dump = "";
+                  try {
+                    dump = JSON.stringify(pe, Object.getOwnPropertyNames(pe)).slice(
+                      0,
+                      4000,
+                    );
+                  } catch {
+                    dump = String(pe).slice(0, 4000);
+                  }
+                  console.error(
+                    `[query-diag-ping] failed name=${err?.name} status=${err?.status} code=${err?.code} message=${err?.message}`,
+                  );
+                  console.error(`[query-diag-ping] raw=${dump}`);
                 }
-                console.error(
-                  `[query-diag-ping] failed name=${err?.name} status=${err?.status} code=${err?.code} message=${err?.message}`,
-                );
-                console.error(`[query-diag-ping] raw=${dump}`);
               }
               const terms = await expandQueryTerms(parsed.message);
               const retrievalPrompt = terms
