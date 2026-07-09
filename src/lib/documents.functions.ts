@@ -10,6 +10,7 @@ import {
 import { requireCurrentUser } from "./session.server";
 import { salniAsUser, salniService } from "./supabase.server";
 import { bootstrapStore } from "./store-bootstrap.server";
+import { gemini } from "./gemini.server";
 
 const BUCKET = "documents";
 const SIGNED_URL_EXPIRY_SECONDS = 60;
@@ -272,4 +273,171 @@ export const retryDocumentFn = createServerFn({ method: "POST" })
       .eq("id", data.documentId);
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const };
+  });
+
+/**
+ * Phase-3 single-document delete. Strict ordering per spec:
+ *   1. Delete the Gemini File Search document (if the row has a resource name).
+ *   2. Only on success → delete the Storage object.
+ *   3. Only on success → delete the documents row.
+ *   4. Best-effort audit_log insert (never blocks success).
+ *
+ * Any failure in step 1 or 2 STOPS the chain and returns the raw error to
+ * the caller — the row is left untouched so the user can retry after
+ * inspecting the error.
+ *
+ * This function uses the service-role client because:
+ *   - Clients have no DELETE policy on `documents` (deliberate).
+ *   - Storage removal and Gemini calls need the service-role key.
+ * The caller is authorized via `assertOrgMember` before any side effect.
+ */
+export const deleteDocumentFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ documentId: z.string().uuid(), orgId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const user = await requireCurrentUser();
+    await assertOrgMember(user.accessToken, data.orgId);
+
+    const svc = salniService();
+
+    // Load the row we're about to delete. Verify it belongs to the org the
+    // caller claimed — belt-and-suspenders on top of assertOrgMember.
+    const read = await svc
+      .from("documents")
+      .select("id, organization_id, storage_path, file_search_document_name, file_name")
+      .eq("id", data.documentId)
+      .maybeSingle();
+    if (read.error) {
+      return {
+        ok: false as const,
+        stage: "read" as const,
+        error: `documents.select failed: ${read.error.message}`,
+      };
+    }
+    if (!read.data) {
+      return { ok: false as const, stage: "read" as const, error: "Document not found" };
+    }
+    if (read.data.organization_id !== data.orgId) {
+      return { ok: false as const, stage: "read" as const, error: "Forbidden" };
+    }
+
+    const row = read.data as {
+      id: string;
+      organization_id: string;
+      storage_path: string | null;
+      file_search_document_name: string | null;
+      file_name: string | null;
+    };
+
+    // ── Step 1: Gemini File Search document delete ────────────────────────
+    // If the row never got a resource name (e.g. upload failed before the
+    // operation returned one), there is nothing to delete in Gemini — skip
+    // step 1 with a warning and proceed. This is the ONLY sanctioned skip.
+    let geminiSkipped = false;
+    if (row.file_search_document_name && row.file_search_document_name.length > 0) {
+      try {
+        const ai = gemini();
+        await ai.fileSearchStores.documents.delete({
+          name: row.file_search_document_name,
+        });
+      } catch (e) {
+        const err = e as {
+          name?: string;
+          message?: string;
+          status?: number;
+          code?: number | string;
+        };
+        // Treat NOT_FOUND as already-deleted upstream; anything else stops
+        // the chain and surfaces the raw error to the UI.
+        const status = err?.status;
+        const code = err?.code;
+        const msg = err?.message ?? String(e);
+        const looksMissing =
+          status === 404 ||
+          code === 404 ||
+          code === "NOT_FOUND" ||
+          /not\s*found/i.test(msg);
+        if (!looksMissing) {
+          console.error("deleteDocument: gemini delete failed", {
+            documentId: row.id,
+            fileSearchName: row.file_search_document_name,
+            status,
+            code,
+            message: msg,
+          });
+          return {
+            ok: false as const,
+            stage: "gemini" as const,
+            error: `Gemini delete failed: ${msg}`,
+          };
+        }
+        console.warn("deleteDocument: gemini reports NOT_FOUND, continuing", {
+          documentId: row.id,
+          fileSearchName: row.file_search_document_name,
+        });
+      }
+    } else {
+      geminiSkipped = true;
+      console.warn("deleteDocument: file_search_document_name is null, skipping Gemini step", {
+        documentId: row.id,
+      });
+    }
+
+    // ── Step 2: Storage object delete ─────────────────────────────────────
+    if (row.storage_path && row.storage_path.length > 0) {
+      const rm = await svc.storage.from(BUCKET).remove([row.storage_path]);
+      if (rm.error) {
+        // Storage's remove() returns success for missing keys, so any error
+        // here is a real failure — stop and surface it.
+        console.error("deleteDocument: storage.remove failed", {
+          documentId: row.id,
+          storagePath: row.storage_path,
+          error: rm.error,
+        });
+        return {
+          ok: false as const,
+          stage: "storage" as const,
+          error: `Storage delete failed: ${rm.error.message}`,
+        };
+      }
+    }
+
+    // ── Step 3: documents row delete ──────────────────────────────────────
+    const del = await svc.from("documents").delete().eq("id", row.id);
+    if (del.error) {
+      console.error("deleteDocument: documents.delete failed", {
+        documentId: row.id,
+        error: del.error,
+      });
+      return {
+        ok: false as const,
+        stage: "row" as const,
+        error: `documents.delete failed: ${del.error.message}`,
+      };
+    }
+
+    // ── Step 4: audit_log (best-effort, never blocks success) ─────────────
+    try {
+      const audit = await svc.from("audit_log").insert({
+        organization_id: row.organization_id,
+        actor_user_id: user.userId,
+        action: "document.deleted",
+        target_type: "document",
+        target_id: row.id,
+        metadata: {
+          file_name: row.file_name,
+          storage_path: row.storage_path,
+          file_search_document_name: row.file_search_document_name,
+          gemini_skipped: geminiSkipped,
+        },
+      });
+      if (audit.error) {
+        console.warn("deleteDocument: audit_log insert failed (non-fatal)", audit.error);
+      }
+    } catch (e) {
+      console.warn("deleteDocument: audit_log insert threw (non-fatal)", e);
+    }
+
+    return { ok: true as const, geminiSkipped };
   });
