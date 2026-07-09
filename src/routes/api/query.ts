@@ -252,6 +252,12 @@ export const Route = createFileRoute("/api/query")({
 
             // Persist assistant message + citations + usage.
             try {
+              if (streamErrored) {
+                // Don't persist a phantom assistant turn on infra errors.
+                send({ type: "done" });
+                controller.close();
+                return;
+              }
               const { data: msgRow } = await svc
                 .from("messages")
                 .insert({
