@@ -338,7 +338,7 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
     if (row.file_search_document_name && row.file_search_document_name.length > 0) {
       try {
         const ai = gemini();
-        await ai.documents.delete({
+        await ai.fileSearchStores.documents.delete({
           name: row.file_search_document_name,
         });
       } catch (e) {
