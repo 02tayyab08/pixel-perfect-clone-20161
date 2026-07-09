@@ -340,6 +340,7 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
         const ai = gemini();
         await ai.fileSearchStores.documents.delete({
           name: row.file_search_document_name,
+          config: { force: true },
         });
       } catch (e) {
         const err = e as {
