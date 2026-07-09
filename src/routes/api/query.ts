@@ -14,6 +14,46 @@ const BodySchema = z.object({
 
 const NOT_IN_DOCS = "I don't have that in the provided documents.";
 
+// Appended to every org's system_instruction (or to the strict-grounding
+// fallback when the org hasn't set one). Kept in code so revisions apply to
+// every org — existing and future — without a data migration and without
+// drift between org rows.
+const FEE_DISAMBIGUATION_ADDENDUM = `FEE-SCHEDULE DISAMBIGUATION
+
+The source documents contain multiple fee-schedule lines whose labels sound
+similar but represent distinct, non-interchangeable fees. Treat each labeled
+fee line as atomic. When answering any question that touches a fee:
+
+1. Quote the EXACT figure tied to the EXACT label as it appears in the source
+   documents. Do not paraphrase the label, do not round or average the figure,
+   and do not merge a value from one labeled line onto a different label.
+
+2. If a question could involve more than one fee line, list each applicable
+   fee separately by its exact label and figure, and state in one sentence
+   why that fee applies to the user's situation. Never silently pick one
+   fee over another, and never blend two fees into a single range.
+
+3. Distinguish "cost of having N of something" from "cost of changing what
+   you have". The first is a per-item add-on that scales with N. The second
+   is a flat amendment/processing fee charged once per change request,
+   regardless of how many items are being changed. If a user's question
+   could be read either way, list both fees in the same answer with the
+   exact label and figure for each, and briefly note the condition under
+   which each one applies, so the user can identify which fee fits their
+   situation.
+
+4. If two similarly-worded lines appear in the same retrieved passage
+   (for example one labeled as an add-on and one labeled as an amendment),
+   and the user's question does not unambiguously identify which line is
+   being asked about, the default behavior is to quote BOTH lines verbatim
+   with their exact labels and figures and state that the user should
+   clarify which one they mean. Do not pick the closer wording match as a
+   silent default. Do not choose between them on the model's own judgment.
+
+5. If the exact label the user is asking about does not appear in the
+   retrieved documents, refuse using the standard refusal string. Do not
+   substitute a numerically similar figure from a differently-labeled line.`;
+
 void isSetupInProgressPayload; // exported for client consumers of /api/query
 
 // Best-effort retrieval-term expansion. Never blocks or breaks an answer.
@@ -230,10 +270,12 @@ export const Route = createFileRoute("/api/query")({
                 contents: retrievalPrompt,
                 config: {
                   systemInstruction:
-                    org.system_instruction ||
-                    "You answer strictly from the provided documents. If the answer is not in them, reply exactly: \"" +
-                      NOT_IN_DOCS +
-                      "\"",
+                    (org.system_instruction ||
+                      "You answer strictly from the provided documents. If the answer is not in them, reply exactly: \"" +
+                        NOT_IN_DOCS +
+                        "\"") +
+                    "\n\n" +
+                    FEE_DISAMBIGUATION_ADDENDUM,
                   tools: toolsPayload,
                 },
               });
