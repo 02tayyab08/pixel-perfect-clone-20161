@@ -193,7 +193,7 @@ function ChatPage() {
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a question…"
+          placeholder="Ask a full question, e.g. 'What is the license cost at Meydan?'"
           disabled={busy}
         />
         <Button type="submit" disabled={busy || !input.trim()}>
@@ -206,6 +206,7 @@ function ChatPage() {
         onOpenChange={(o) => !o && setPanel(null)}
         side={isMobile ? "bottom" : "right"}
         citations={panel ? messages[panel.msgIdx]?.citations ?? [] : []}
+        answerText={panel ? messages[panel.msgIdx]?.content ?? "" : ""}
         index={panel?.citIdx ?? 0}
         onNavigate={(next) =>
           setPanel((p) => (p ? { ...p, citIdx: next } : p))
@@ -220,6 +221,7 @@ function CitationPanel({
   onOpenChange,
   side,
   citations,
+  answerText,
   index,
   onNavigate,
 }: {
@@ -227,11 +229,15 @@ function CitationPanel({
   onOpenChange: (o: boolean) => void;
   side: "right" | "bottom";
   citations: NonNullable<ChatMsg["citations"]>;
+  answerText: string;
   index: number;
   onNavigate: (next: number) => void;
 }) {
   const cit = citations[index];
   const total = citations.length;
+  const highlighted = cit?.snippet
+    ? highlightSnippet(cit.snippet, answerText)
+    : null;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -251,12 +257,23 @@ function CitationPanel({
         </SheetHeader>
 
         <div className="mt-4 px-4">
-          {cit?.snippet ? (
+          {cit?.snippet && highlighted ? (
             <blockquote
               dir="auto"
               className="border-l-4 border-primary/50 bg-muted/60 px-4 py-3 text-sm italic leading-relaxed text-foreground"
             >
-              {cit.snippet}
+              {highlighted.map((seg, i) =>
+                seg.mark ? (
+                  <mark
+                    key={i}
+                    className="rounded bg-primary/15 px-0.5 not-italic text-foreground"
+                  >
+                    {seg.text}
+                  </mark>
+                ) : (
+                  <span key={i}>{seg.text}</span>
+                ),
+              )}
             </blockquote>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -289,4 +306,82 @@ function CitationPanel({
       </SheetContent>
     </Sheet>
   );
+}
+
+// --- Snippet highlighting (heuristic; lexical sentence overlap only) ---
+
+const STOPWORDS = new Set([
+  "the","a","an","and","or","but","if","then","of","for","to","in","on","at",
+  "by","with","as","is","are","was","were","be","been","being","it","its",
+  "this","that","these","those","from","not","no","do","does","did","have",
+  "has","had","you","your","we","our","they","their","he","she","him","her",
+  "what","which","who","whom","how","when","where","why","can","could","would",
+  "should","will","may","might","about","into","than","also","such","any",
+  "all","some","one","two","more","most","other","only","just","so","up","out",
+  // Arabic function words
+  "في","من","إلى","على","عن","و","او","أو","ما","ماذا","هل","كيف","اين","أين",
+  "متى","لماذا","هذا","هذه","ذلك","تلك","التي","الذي","الذين","هو","هي","نحن",
+  "هم","انت","أنت","انا","أنا","كان","كانت","يكون","تكون","لا","لم","لن","قد",
+]);
+
+const NUMBER_WORDS: Record<string, string> = {
+  zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5",
+  six: "6", seven: "7", eight: "8", nine: "9", ten: "10",
+};
+
+function tokenize(s: string): Set<string> {
+  const out = new Set<string>();
+  const raw = s.toLowerCase().split(/[^\p{L}\p{N}]+/u);
+  for (const t of raw) {
+    if (!t) continue;
+    const norm = NUMBER_WORDS[t] ?? t;
+    if (norm.length < 3 && !/^\d+$/.test(norm)) continue;
+    if (STOPWORDS.has(norm)) continue;
+    out.add(norm);
+  }
+  return out;
+}
+
+function highlightSnippet(
+  snippet: string,
+  answer: string,
+): Array<{ text: string; mark: boolean }> {
+  const answerTokens = tokenize(answer);
+  if (answerTokens.size === 0) return [{ text: snippet, mark: false }];
+
+  // Split snippet into sentences on latin + arabic terminators, keeping delimiters.
+  const parts = snippet.split(/([.!?؟\n]+\s*)/);
+  const sentences: Array<{ text: string; start: number; end: number }> = [];
+  let cursor = 0;
+  for (let i = 0; i < parts.length; i += 2) {
+    const body = parts[i] ?? "";
+    const trailer = parts[i + 1] ?? "";
+    const full = body + trailer;
+    if (full.length === 0) continue;
+    sentences.push({ text: full, start: cursor, end: cursor + full.length });
+    cursor += full.length;
+  }
+
+  const scores = sentences.map((s) => {
+    const toks = tokenize(s.text);
+    let n = 0;
+    for (const t of toks) if (answerTokens.has(t)) n += 1;
+    return n;
+  });
+  const max = Math.max(0, ...scores);
+  if (max < 2) return [{ text: snippet, mark: false }];
+  const threshold = Math.max(2, Math.ceil(max * 0.6));
+
+  const segs: Array<{ text: string; mark: boolean }> = [];
+  sentences.forEach((s, i) => {
+    segs.push({ text: s.text, mark: scores[i] >= threshold });
+  });
+  // Merge adjacent segs with same mark.
+  const merged: Array<{ text: string; mark: boolean }> = [];
+  for (const s of segs) {
+    const last = merged[merged.length - 1];
+    if (last && last.mark === s.mark) last.text += s.text;
+    else merged.push({ ...s });
+  }
+  return merged;
 }
