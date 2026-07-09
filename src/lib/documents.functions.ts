@@ -423,8 +423,8 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
         organization_id: row.organization_id,
         actor_user_id: user.userId,
         action: "document.deleted",
-        target_type: "document",
-        target_id: row.id,
+        entity_type: "document",
+        entity_id: row.id,
         metadata: {
           file_name: row.file_name,
           storage_path: row.storage_path,
