@@ -528,7 +528,7 @@ export const backfillFileSearchNamesFn = createServerFn({ method: "POST" })
       do {
         const page = (await ai.fileSearchStores.documents.list({
           parent: storeName,
-          config: { pageSize: 100, pageToken },
+          config: { pageSize: 20, pageToken },
         } as never)) as {
           documents?: FsDoc[];
           nextPageToken?: string;
