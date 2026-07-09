@@ -105,9 +105,17 @@ export const Route = createFileRoute("/api/query")({
         }
 
         let storeName: string;
+        const storeSource = org.file_search_store_name ? "org.file_search_store_name" : "app_config(bootstrap)";
         try {
           storeName = await bootstrapStore(org.file_search_store_name ?? null);
+          console.log(
+            `[query-diag] storeName=${JSON.stringify(storeName)} source=${storeSource} orgOverride=${JSON.stringify(org.file_search_store_name ?? null)}`,
+          );
+          if (!storeName || storeName.length === 0) {
+            console.error("[query-diag] WARNING: bootstrapStore returned falsy/empty storeName — File Search tool will be attached with an invalid value");
+          }
         } catch (e) {
+          console.error("[query-diag] bootstrapStore threw — request will 500 (tool NOT attached, no generateContent call made)", e);
           if (e instanceof SetupInProgressError) {
             return new Response(JSON.stringify(e.toPayload()), {
               status: 409,
@@ -164,8 +172,14 @@ export const Route = createFileRoute("/api/query")({
             send({ type: "conversation", id: conversationId });
 
             const startedAt = Date.now();
+            let firstTokenAt: number | null = null;
             let fullText = "";
             let groundingChunks: unknown[] = [];
+            let lastCandidate: unknown = null;
+            let lastUsageMetadata: unknown = null;
+            let chunkCount = 0;
+            let chunksWithGroundingMetadata = 0;
+            let chunksWithGroundingChunks = 0;
 
             try {
               const ai = gemini();
@@ -173,6 +187,17 @@ export const Route = createFileRoute("/api/query")({
               const retrievalPrompt = terms
                 ? `${parsed.message}\n(Related terms to consider when searching the documents: ${terms})`
                 : parsed.message;
+              const toolsPayload = [
+                {
+                  fileSearch: {
+                    fileSearchStoreNames: [storeName],
+                    metadataFilter: `org_id="${org.id}"`,
+                  },
+                },
+              ];
+              console.log(
+                `[query-diag] tools=${JSON.stringify(toolsPayload)} model=${QUERY_MODEL} metadataFilter=${JSON.stringify(`org_id="${org.id}"`)}`,
+              );
               // SINGLE-TURN RETRIEVAL (V1): only the current question is sent to
               // File Search. Do NOT append prior transcript turns here — that would
               // let earlier refusals poison later lookups. Conversational follow-ups
@@ -186,26 +211,34 @@ export const Route = createFileRoute("/api/query")({
                     "You answer strictly from the provided documents. If the answer is not in them, reply exactly: \"" +
                       NOT_IN_DOCS +
                       "\"",
-                  tools: [
-                    {
-                      fileSearch: {
-                        fileSearchStoreNames: [storeName],
-                        // SECURITY INVARIANT: server-resolved uuid, not client input.
-                        metadataFilter: `org_id="${org.id}"`,
-                      },
-                    },
-                  ],
+                  tools: toolsPayload,
                 },
               });
 
               for await (const chunk of iter) {
+                chunkCount++;
                 const text = chunk.text ?? "";
                 if (text) {
+                  if (firstTokenAt === null) firstTokenAt = Date.now();
                   fullText += text;
                   send({ type: "delta", text });
                 }
-                const gm = chunk.candidates?.[0]?.groundingMetadata;
-                if (gm?.groundingChunks) groundingChunks = gm.groundingChunks;
+                const cand = chunk.candidates?.[0];
+                if (cand) lastCandidate = cand;
+                const gm = cand?.groundingMetadata;
+                if (gm) {
+                  chunksWithGroundingMetadata++;
+                  const gcLen = Array.isArray(gm.groundingChunks) ? gm.groundingChunks.length : 0;
+                  console.log(
+                    `[query-diag] chunk#${chunkCount} hasGroundingMetadata=true groundingChunks.len=${gcLen} gmKeys=${JSON.stringify(Object.keys(gm))}`,
+                  );
+                  if (gm.groundingChunks && gm.groundingChunks.length > 0) {
+                    chunksWithGroundingChunks++;
+                    groundingChunks = gm.groundingChunks;
+                  }
+                }
+                const um = (chunk as { usageMetadata?: unknown }).usageMetadata;
+                if (um) lastUsageMetadata = um;
               }
             } catch (e) {
               console.error("gemini.generateContentStream failed (raw)", e);
@@ -220,6 +253,27 @@ export const Route = createFileRoute("/api/query")({
             }
 
             const latencyMs = Date.now() - startedAt;
+            const ttftMs = firstTokenAt !== null ? firstTokenAt - startedAt : null;
+            try {
+              console.log(
+                `[query-diag] chunks=${chunkCount} chunksWithGM=${chunksWithGroundingMetadata} chunksWithGC=${chunksWithGroundingChunks} ttft=${ttftMs}ms total=${latencyMs}ms`,
+              );
+              console.log(
+                `[query-diag] usageMetadata=${JSON.stringify(lastUsageMetadata)}`,
+              );
+              // Full final candidate shape (including finishReason). Stringify safely.
+              let candStr: string;
+              try {
+                candStr = JSON.stringify(lastCandidate);
+              } catch {
+                candStr = "<unserializable>";
+              }
+              const MAX = 8000;
+              if (candStr && candStr.length > MAX) candStr = candStr.slice(0, MAX) + `…[truncated ${candStr.length - MAX}]`;
+              console.log(`[query-diag] finalCandidate=${candStr}`);
+            } catch (diagErr) {
+              console.error("[query-diag] diagnostic log failed", diagErr);
+            }
 
             // Grounding miss → override with the canonical string.
             if (fullText.trim().length > 0 && groundingChunks.length === 0) {
