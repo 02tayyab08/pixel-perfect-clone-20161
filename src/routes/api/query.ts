@@ -173,6 +173,10 @@ export const Route = createFileRoute("/api/query")({
               const retrievalPrompt = terms
                 ? `${parsed.message}\n(Related terms to consider when searching the documents: ${terms})`
                 : parsed.message;
+              // SINGLE-TURN RETRIEVAL (V1): only the current question is sent to
+              // File Search. Do NOT append prior transcript turns here — that would
+              // let earlier refusals poison later lookups. Conversational follow-ups
+              // ("what about X?") are a V2 feature.
               const iter = await ai.models.generateContentStream({
                 model: QUERY_MODEL,
                 contents: retrievalPrompt,
@@ -223,6 +227,14 @@ export const Route = createFileRoute("/api/query")({
               send({ type: "override", text: fullText });
             }
 
+            // Explicit refusal signal (transport-only, no schema change).
+            const isRefusal =
+              fullText.trim() === NOT_IN_DOCS || groundingChunks.length === 0;
+            send({ type: "meta", isRefusal });
+            console.log(
+              `[query] grounding=${groundingChunks.length} refusal=${isRefusal} latency=${latencyMs}ms`,
+            );
+
             // Persist assistant message + citations + usage.
             try {
               const { data: msgRow } = await svc
@@ -238,7 +250,7 @@ export const Route = createFileRoute("/api/query")({
                 })
                 .select("id")
                 .single();
-              if (msgRow?.id && groundingChunks.length > 0) {
+              if (msgRow?.id && !isRefusal && groundingChunks.length > 0) {
                 const rows = groundingChunks
                   .map((raw) => {
                     const c = raw as {
@@ -264,9 +276,18 @@ export const Route = createFileRoute("/api/query")({
                     };
                   })
                   .filter((v): v is NonNullable<typeof v> => v !== null);
-                if (rows.length > 0) {
-                  await svc.from("citations").insert(rows);
-                  send({ type: "citations", rows });
+                // Dedupe by document_id (fallback source_title) + page,
+                // preserving Gemini's original relevance order.
+                const seen = new Set<string>();
+                const deduped = rows.filter((r) => {
+                  const key = `${r.document_id ?? r.source_title}|${r.page ?? ""}`;
+                  if (seen.has(key)) return false;
+                  seen.add(key);
+                  return true;
+                });
+                if (deduped.length > 0) {
+                  await svc.from("citations").insert(deduped);
+                  send({ type: "citations", rows: deduped });
                 }
               }
               await svc.rpc("record_query_usage", { p_org: parsed.orgId });
