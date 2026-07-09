@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createDocumentRowFn,
+  deleteDocumentFn,
   listDocumentsFn,
   markDocumentUploadFailedFn,
   retryDocumentFn,
@@ -17,6 +18,7 @@ import {
   Loader2,
   Lightbulb,
   RefreshCw,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -46,11 +48,15 @@ function DocumentsPage() {
   const markFailed = useServerFn(markDocumentUploadFailedFn);
   const listDocs = useServerFn(listDocumentsFn);
   const retryDoc = useServerFn(retryDocumentFn);
+  const deleteDoc = useServerFn(deleteDocumentFn);
 
   const [rows, setRows] = useState<DocRow[]>([]);
   const [settingUp, setSettingUp] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<DocRow | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const tipsKey = `salni.docs-tips-dismissed.${org.id}`;
   const [tipsDismissed, setTipsDismissed] = useState(false);
@@ -127,6 +133,29 @@ function DocumentsPage() {
       }
     }
     refresh();
+  }
+
+  async function performDelete(row: DocRow) {
+    setDeleteError(null);
+    setDeletingId(row.id);
+    try {
+      const res = await deleteDoc({ data: { orgId: org.id, documentId: row.id } });
+      if (!("ok" in res) || !res.ok) {
+        // Surface the raw stage-labeled error, per the same discipline as
+        // every other privileged route.
+        const stage = "stage" in res ? res.stage : "unknown";
+        const msg = "error" in res ? res.error : "Delete failed";
+        setDeleteError(`[${stage}] ${msg}`);
+        return;
+      }
+      // Optimistic removal; the interval refresh will confirm.
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
+      setConfirmDelete(null);
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -221,6 +250,12 @@ function DocumentsPage() {
         </div>
       ) : null}
 
+      {deleteError ? (
+        <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+          {deleteError}
+        </div>
+      ) : null}
+
       <div className="mt-8 rounded-2xl border border-border bg-card">
         <table className="w-full text-sm">
           <thead className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -247,24 +282,85 @@ function DocumentsPage() {
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{formatBytes(r.size_bytes)}</td>
                 <td className="px-4 py-3 text-right">
-                  {r.status === "failed" ? (
+                  <div className="inline-flex items-center gap-2">
+                    {r.status === "failed" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          await retryDoc({ data: { orgId: org.id, documentId: r.id } });
+                          refresh();
+                        }}
+                      >
+                        <RefreshCw className="mr-2 h-3 w-3" /> Retry
+                      </Button>
+                    ) : null}
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      onClick={async () => {
-                        await retryDoc({ data: { orgId: org.id, documentId: r.id } });
-                        refresh();
-                      }}
+                      aria-label={`Delete ${r.file_name}`}
+                      disabled={deletingId === r.id}
+                      onClick={() => setConfirmDelete(r)}
                     >
-                      <RefreshCw className="mr-2 h-3 w-3" /> Retry
+                      {deletingId === r.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </Button>
-                  ) : null}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {confirmDelete ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => {
+            if (deletingId !== confirmDelete.id) setConfirmDelete(null);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-display text-lg font-semibold">Delete document?</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Delete <span className="font-medium text-foreground">{confirmDelete.file_name}</span>?
+              This removes the file from indexing and cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setConfirmDelete(null)}
+                disabled={deletingId === confirmDelete.id}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => performDelete(confirmDelete)}
+                disabled={deletingId === confirmDelete.id}
+              >
+                {deletingId === confirmDelete.id ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
