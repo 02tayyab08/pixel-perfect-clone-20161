@@ -101,6 +101,19 @@ async function processOne(row: ClaimedRow) {
             { key: "org_id", stringValue: row.organization_id },
             { key: "document_id", stringValue: row.id },
           ],
+          // Tight chunking for fee-schedule / tabular sources. Smaller
+          // chunks with modest overlap keep visually-adjacent rows
+          // (e.g. "Investor Visa Add-On" vs "Visa Amendment") in
+          // separate retrieval units so the model is less likely to
+          // swap their figures. Applies only to documents uploaded
+          // AFTER this change ships — existing docs keep their prior
+          // chunking until re-uploaded.
+          chunkingConfig: {
+            whiteSpaceConfig: {
+              maxTokensPerChunk: 200,
+              maxOverlapTokens: 20,
+            },
+          },
         },
       });
 
