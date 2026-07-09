@@ -105,17 +105,9 @@ export const Route = createFileRoute("/api/query")({
         }
 
         let storeName: string;
-        const storeSource = org.file_search_store_name ? "org.file_search_store_name" : "app_config(bootstrap)";
         try {
           storeName = await bootstrapStore(org.file_search_store_name ?? null);
-          console.log(
-            `[query-diag] storeName=${JSON.stringify(storeName)} source=${storeSource} orgOverride=${JSON.stringify(org.file_search_store_name ?? null)}`,
-          );
-          if (!storeName || storeName.length === 0) {
-            console.error("[query-diag] WARNING: bootstrapStore returned falsy/empty storeName — File Search tool will be attached with an invalid value");
-          }
         } catch (e) {
-          console.error("[query-diag] bootstrapStore threw — request will 500 (tool NOT attached, no generateContent call made)", e);
           if (e instanceof SetupInProgressError) {
             return new Response(JSON.stringify(e.toPayload()), {
               status: 409,
@@ -172,14 +164,9 @@ export const Route = createFileRoute("/api/query")({
             send({ type: "conversation", id: conversationId });
 
             const startedAt = Date.now();
-            let firstTokenAt: number | null = null;
             let fullText = "";
             let groundingChunks: unknown[] = [];
-            let lastCandidate: unknown = null;
-            let lastUsageMetadata: unknown = null;
-            let chunkCount = 0;
-            let chunksWithGroundingMetadata = 0;
-            let chunksWithGroundingChunks = 0;
+            let streamErrored = false;
 
             try {
               const ai = gemini();
@@ -195,9 +182,6 @@ export const Route = createFileRoute("/api/query")({
                   },
                 },
               ];
-              console.log(
-                `[query-diag] tools=${JSON.stringify(toolsPayload)} model=${QUERY_MODEL} metadataFilter=${JSON.stringify(`org_id="${org.id}"`)}`,
-              );
               // SINGLE-TURN RETRIEVAL (V1): only the current question is sent to
               // File Search. Do NOT append prior transcript turns here — that would
               // let earlier refusals poison later lookups. Conversational follow-ups
@@ -216,77 +200,54 @@ export const Route = createFileRoute("/api/query")({
               });
 
               for await (const chunk of iter) {
-                chunkCount++;
                 const text = chunk.text ?? "";
                 if (text) {
-                  if (firstTokenAt === null) firstTokenAt = Date.now();
                   fullText += text;
                   send({ type: "delta", text });
                 }
                 const cand = chunk.candidates?.[0];
-                if (cand) lastCandidate = cand;
                 const gm = cand?.groundingMetadata;
-                if (gm) {
-                  chunksWithGroundingMetadata++;
-                  const gcLen = Array.isArray(gm.groundingChunks) ? gm.groundingChunks.length : 0;
-                  console.log(
-                    `[query-diag] chunk#${chunkCount} hasGroundingMetadata=true groundingChunks.len=${gcLen} gmKeys=${JSON.stringify(Object.keys(gm))}`,
-                  );
-                  if (gm.groundingChunks && gm.groundingChunks.length > 0) {
-                    chunksWithGroundingChunks++;
-                    groundingChunks = gm.groundingChunks;
-                  }
+                if (gm?.groundingChunks && gm.groundingChunks.length > 0) {
+                  groundingChunks = gm.groundingChunks;
                 }
-                const um = (chunk as { usageMetadata?: unknown }).usageMetadata;
-                if (um) lastUsageMetadata = um;
               }
             } catch (e) {
               console.error("gemini.generateContentStream failed (raw)", e);
+              streamErrored = true;
               const err = e as { name?: string; message?: string; status?: number };
-              const raw = [err?.name, err?.status, err?.message]
-                .filter(Boolean)
-                .join(" | ");
-              const msg = `gemini.generateContentStream failed: ${raw || "unknown"}`;
-              send({ type: "error", message: msg });
-              send({ type: "delta", text: msg });
-              fullText = msg;
+              const status = err?.status;
+              const userMsg =
+                status === 429
+                  ? "The assistant is temporarily rate limited. Please try again in a moment."
+                  : status === 402
+                    ? "The assistant is temporarily unavailable (billing)."
+                    : "The assistant hit an unexpected error. Please try again.";
+              // Do NOT write the error into fullText — that would trigger the
+              // grounding-miss override and masquerade as a refusal.
+              send({ type: "error", message: userMsg });
             }
 
             const latencyMs = Date.now() - startedAt;
-            const ttftMs = firstTokenAt !== null ? firstTokenAt - startedAt : null;
-            try {
-              console.log(
-                `[query-diag] chunks=${chunkCount} chunksWithGM=${chunksWithGroundingMetadata} chunksWithGC=${chunksWithGroundingChunks} ttft=${ttftMs}ms total=${latencyMs}ms`,
-              );
-              console.log(
-                `[query-diag] usageMetadata=${JSON.stringify(lastUsageMetadata)}`,
-              );
-              // Full final candidate shape (including finishReason). Stringify safely.
-              let candStr: string;
-              try {
-                candStr = JSON.stringify(lastCandidate);
-              } catch {
-                candStr = "<unserializable>";
-              }
-              const MAX = 8000;
-              if (candStr && candStr.length > MAX) candStr = candStr.slice(0, MAX) + `…[truncated ${candStr.length - MAX}]`;
-              console.log(`[query-diag] finalCandidate=${candStr}`);
-            } catch (diagErr) {
-              console.error("[query-diag] diagnostic log failed", diagErr);
-            }
 
             // Grounding miss → override with the canonical string.
-            if (fullText.trim().length > 0 && groundingChunks.length === 0) {
+            // Skip when the stream errored: the client already got an {type:"error"}
+            // frame, and we must not synthesize a refusal on top of an infra failure.
+            if (
+              !streamErrored &&
+              fullText.trim().length > 0 &&
+              groundingChunks.length === 0
+            ) {
               fullText = NOT_IN_DOCS;
               send({ type: "override", text: fullText });
             }
 
             // Explicit refusal signal (transport-only, no schema change).
             const isRefusal =
-              fullText.trim() === NOT_IN_DOCS || groundingChunks.length === 0;
+              !streamErrored &&
+              (fullText.trim() === NOT_IN_DOCS || groundingChunks.length === 0);
             send({ type: "meta", isRefusal });
             console.log(
-              `[query] grounding=${groundingChunks.length} refusal=${isRefusal} latency=${latencyMs}ms`,
+              `[query] grounding=${groundingChunks.length} refusal=${isRefusal} errored=${streamErrored} latency=${latencyMs}ms`,
             );
 
             // Persist assistant message + citations + usage.
