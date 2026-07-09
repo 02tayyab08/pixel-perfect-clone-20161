@@ -166,6 +166,8 @@ export const Route = createFileRoute("/api/query")({
             const startedAt = Date.now();
             let fullText = "";
             let groundingChunks: unknown[] = [];
+            let groundingSupportsLen = 0;
+            let groundingSupportsSample: unknown = undefined;
             let streamErrored = false;
 
             try {
@@ -244,6 +246,12 @@ export const Route = createFileRoute("/api/query")({
                 if (gm?.groundingChunks && gm.groundingChunks.length > 0) {
                   groundingChunks = gm.groundingChunks;
                 }
+                const gs = (gm as { groundingSupports?: unknown[] } | undefined)
+                  ?.groundingSupports;
+                if (Array.isArray(gs) && gs.length > groundingSupportsLen) {
+                  groundingSupportsLen = gs.length;
+                  groundingSupportsSample = gs[0];
+                }
               }
             } catch (e) {
               const err = e as {
@@ -295,8 +303,17 @@ export const Route = createFileRoute("/api/query")({
               (fullText.trim() === NOT_IN_DOCS || groundingChunks.length === 0);
             send({ type: "meta", isRefusal });
             console.log(
-              `[query] grounding=${groundingChunks.length} refusal=${isRefusal} errored=${streamErrored} latency=${latencyMs}ms`,
+              `[query] grounding=${groundingChunks.length} supports=${groundingSupportsLen} refusal=${isRefusal} errored=${streamErrored} latency=${latencyMs}ms`,
             );
+            if (groundingSupportsLen > 0) {
+              try {
+                console.log(
+                  `[query-supports] sample=${JSON.stringify(groundingSupportsSample).slice(0, 800)}`,
+                );
+              } catch {
+                /* ignore */
+              }
+            }
 
             // Persist assistant message + citations + usage.
             try {
