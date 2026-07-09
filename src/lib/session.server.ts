@@ -1,5 +1,5 @@
 import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
-import { verifyAccessToken } from "./supabase.server";
+import { salniAnon, verifyAccessToken } from "./supabase.server";
 
 const COOKIE_NAME = "salni_session";
 // 30 days in seconds
@@ -84,9 +84,52 @@ export type CurrentUser = {
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const payload = readSessionCookieRaw();
   if (!payload) return null;
-  const verified = await verifyAccessToken(payload.access_token);
-  if (!verified) return null;
-  return { userId: verified.userId, email: verified.email, accessToken: payload.access_token };
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const isExpiring = payload.expires_at > 0 && payload.expires_at - nowSec < 60;
+
+  // Fast path: token still fresh — verify and return.
+  if (!isExpiring) {
+    const verified = await verifyAccessToken(payload.access_token);
+    if (verified) {
+      return { userId: verified.userId, email: verified.email, accessToken: payload.access_token };
+    }
+  }
+
+  // Slow path: token expired or about to expire — try silent refresh.
+  if (!payload.refresh_token) {
+    clearSessionCookie();
+    return null;
+  }
+  try {
+    const anon = salniAnon();
+    const { data, error } = await anon.auth.refreshSession({
+      refresh_token: payload.refresh_token,
+    });
+    const session = data?.session;
+    const user = data?.user ?? session?.user;
+    if (error || !session || !user) {
+      console.warn("[session] refresh failed", error?.message);
+      clearSessionCookie();
+      return null;
+    }
+    setSessionCookie({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_at: session.expires_at ?? nowSec + 3600,
+      orgs: payload.orgs,
+    });
+    console.log("[session] refreshed access token");
+    return {
+      userId: user.id,
+      email: user.email ?? null,
+      accessToken: session.access_token,
+    };
+  } catch (e) {
+    console.warn("[session] refresh threw", e instanceof Error ? e.message : String(e));
+    clearSessionCookie();
+    return null;
+  }
 }
 
 export async function requireCurrentUser(): Promise<CurrentUser> {
