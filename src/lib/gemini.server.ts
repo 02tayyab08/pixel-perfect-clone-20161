@@ -1,13 +1,19 @@
 import { GoogleGenAI } from "@google/genai";
 
-let cached: GoogleGenAI | null = null;
+let cached: { key: string; client: GoogleGenAI } | null = null;
 
 export function gemini(): GoogleGenAI {
-  if (cached) return cached;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Missing required env var: GEMINI_API_KEY");
-  cached = new GoogleGenAI({ apiKey });
-  return cached;
+  if (cached && cached.key === apiKey) return cached.client;
+  // One-shot key diagnostic: prefix + tail + length only. Never the full key.
+  const prefix = apiKey.slice(0, 4);
+  const tail = apiKey.slice(-4);
+  console.log(
+    `[gemini-key] len=${apiKey.length} prefix=${prefix} tail=${tail} rebuildClient=${cached ? "true" : "false"}`,
+  );
+  cached = { key: apiKey, client: new GoogleGenAI({ apiKey }) };
+  return cached.client;
 }
 
 export const SHARED_STORE_DISPLAY_NAME = "salni-shared-v1";
