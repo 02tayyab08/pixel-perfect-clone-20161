@@ -277,12 +277,24 @@ export const Route = createFileRoute("/api/query")({
                     "\n\n" +
                     FEE_DISAMBIGUATION_ADDENDUM,
                   tools: toolsPayload,
+                  thinkingConfig: {
+                    // Keep reasoning internal. Do NOT set thinkingBudget: 0 —
+                    // fee-disambiguation quality benefits from reasoning; we
+                    // only want it kept off the wire.
+                    includeThoughts: false,
+                  },
                 },
               });
 
               for await (const chunk of iter) {
-                const text = chunk.text ?? "";
-                if (text) {
+                // Per-part iteration (not chunk.text) so we can drop any part
+                // flagged as reasoning/thought regardless of thinkingConfig or
+                // SDK aggregate-getter behavior.
+                const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+                for (const part of parts) {
+                  if ((part as { thought?: boolean }).thought) continue;
+                  const text = (part as { text?: string }).text ?? "";
+                  if (!text) continue;
                   fullText += text;
                   send({ type: "delta", text });
                 }
