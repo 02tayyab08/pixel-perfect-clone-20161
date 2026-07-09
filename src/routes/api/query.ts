@@ -54,6 +54,24 @@ fee line as atomic. When answering any question that touches a fee:
    retrieved documents, refuse using the standard refusal string. Do not
    substitute a numerically similar figure from a differently-labeled line.`;
 
+// Extra rule specifically defending against silent label/figure swaps in
+// comparison/arithmetic questions. Kept as its own block so it's visually
+// obvious in prompt reviews and easy to revise without disturbing rules 1–5.
+const FEE_QUOTED_PAIR_RULE = `FEE COMPARISON — QUOTED PAIR PROTOCOL
+
+Before performing ANY comparison, subtraction, addition, ratio, or table
+construction that involves two or more fee lines, you MUST first write each
+fee as a literal quoted pair on its own line, in the form:
+
+  "<Exact Label From Source>" = <Exact Figure From Source>
+
+Emit every quoted pair BEFORE any comparison prose, table header, or
+arithmetic. Do not paraphrase the label or reformat the figure inside the
+quoted pair. Only after all quoted pairs have been emitted may you produce
+the comparison, difference, or table. If you cannot produce a quoted pair
+for a fee line (label or figure not present verbatim in the retrieved
+documents), refuse per rule 5 above — do NOT synthesize the pair.`;
+
 void isSetupInProgressPayload; // exported for client consumers of /api/query
 
 // Best-effort retrieval-term expansion. Never blocks or breaks an answer.
@@ -275,7 +293,9 @@ export const Route = createFileRoute("/api/query")({
                         NOT_IN_DOCS +
                         "\"") +
                     "\n\n" +
-                    FEE_DISAMBIGUATION_ADDENDUM,
+                    FEE_DISAMBIGUATION_ADDENDUM +
+                    "\n\n" +
+                    FEE_QUOTED_PAIR_RULE,
                   tools: toolsPayload,
                   thinkingConfig: {
                     // Keep reasoning internal. Do NOT set thinkingBudget: 0 —
@@ -286,18 +306,50 @@ export const Route = createFileRoute("/api/query")({
                 },
               });
 
+              // Diagnostic counters for the (D) long-generation duplication
+              // investigation. Logs per-chunk part flags (thought/text length)
+              // and candidate count so we can tell whether a duplicated table
+              // is a leaked thought, a second candidate, or an actual
+              // model-side regeneration in the primary stream.
+              let chunkIdx = 0;
+              let sawMultiCandidate = false;
+              let sawThoughtPart = false;
+              let thoughtCharsDropped = 0;
+              let textParts = 0;
               for await (const chunk of iter) {
+                const candCount = chunk.candidates?.length ?? 0;
+                if (candCount > 1) sawMultiCandidate = true;
                 // Per-part iteration (not chunk.text) so we can drop any part
                 // flagged as reasoning/thought regardless of thinkingConfig or
                 // SDK aggregate-getter behavior.
                 const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+                if (chunkIdx < 5 || chunkIdx % 20 === 0) {
+                  try {
+                    const shape = parts.map((p) => ({
+                      thought: (p as { thought?: boolean }).thought === true,
+                      len: ((p as { text?: string }).text ?? "").length,
+                    }));
+                    console.log(
+                      `[query-parts] chunk=${chunkIdx} cands=${candCount} parts=${JSON.stringify(shape)}`,
+                    );
+                  } catch {
+                    /* ignore */
+                  }
+                }
                 for (const part of parts) {
-                  if ((part as { thought?: boolean }).thought) continue;
+                  if ((part as { thought?: boolean }).thought) {
+                    sawThoughtPart = true;
+                    thoughtCharsDropped +=
+                      ((part as { text?: string }).text ?? "").length;
+                    continue;
+                  }
                   const text = (part as { text?: string }).text ?? "";
                   if (!text) continue;
+                  textParts += 1;
                   fullText += text;
                   send({ type: "delta", text });
                 }
+                chunkIdx += 1;
                 const cand = chunk.candidates?.[0];
                 const gm = cand?.groundingMetadata;
                 if (gm?.groundingChunks && gm.groundingChunks.length > 0) {
@@ -310,6 +362,9 @@ export const Route = createFileRoute("/api/query")({
                   groundingSupportsSample = gs[0];
                 }
               }
+              console.log(
+                `[query-parts-summary] chunks=${chunkIdx} textParts=${textParts} multiCandidate=${sawMultiCandidate} thoughtPartSeen=${sawThoughtPart} thoughtCharsDropped=${thoughtCharsDropped} fullTextLen=${fullText.length}`,
+              );
             } catch (e) {
               const err = e as {
                 name?: string;
