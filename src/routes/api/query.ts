@@ -170,6 +170,40 @@ export const Route = createFileRoute("/api/query")({
 
             try {
               const ai = gemini();
+              // [query-diag-ping]: one non-streaming call with a trivial prompt
+              // and no tools. This surfaces the real upstream HTTP status the
+              // streamer hides behind "Incomplete JSON segment at the end".
+              try {
+                const pingStart = Date.now();
+                const pingRes = await ai.models.generateContent({
+                  model: QUERY_MODEL,
+                  contents: "ping",
+                });
+                const pingText = (pingRes as { text?: string }).text ?? "";
+                console.log(
+                  `[query-diag-ping] ok latency=${Date.now() - pingStart}ms textLen=${pingText.length}`,
+                );
+              } catch (pe) {
+                const err = pe as {
+                  name?: string;
+                  message?: string;
+                  status?: number;
+                  code?: number | string;
+                };
+                let dump = "";
+                try {
+                  dump = JSON.stringify(pe, Object.getOwnPropertyNames(pe)).slice(
+                    0,
+                    4000,
+                  );
+                } catch {
+                  dump = String(pe).slice(0, 4000);
+                }
+                console.error(
+                  `[query-diag-ping] failed name=${err?.name} status=${err?.status} code=${err?.code} message=${err?.message}`,
+                );
+                console.error(`[query-diag-ping] raw=${dump}`);
+              }
               const terms = await expandQueryTerms(parsed.message);
               const retrievalPrompt = terms
                 ? `${parsed.message}\n(Related terms to consider when searching the documents: ${terms})`
@@ -212,9 +246,23 @@ export const Route = createFileRoute("/api/query")({
                 }
               }
             } catch (e) {
-              console.error("gemini.generateContentStream failed (raw)", e);
+              const err = e as {
+                name?: string;
+                message?: string;
+                status?: number;
+                code?: number | string;
+              };
+              let dump = "";
+              try {
+                dump = JSON.stringify(e, Object.getOwnPropertyNames(e)).slice(0, 4000);
+              } catch {
+                dump = String(e).slice(0, 4000);
+              }
+              console.error(
+                `gemini.generateContentStream failed name=${err?.name} status=${err?.status} code=${err?.code} message=${err?.message}`,
+              );
+              console.error(`gemini.generateContentStream raw=${dump}`);
               streamErrored = true;
-              const err = e as { name?: string; message?: string; status?: number };
               const status = err?.status;
               const userMsg =
                 status === 429
