@@ -15,6 +15,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 type ChatMsg = {
   role: "user" | "assistant";
   content: string;
+  isRefusal?: boolean;
   citations?: Array<{
     source_title: string | null;
     page: number | null;
@@ -89,6 +90,7 @@ function ChatPage() {
     let buffer = "";
     let acc = "";
     let cits: ChatMsg["citations"] = [];
+    let isRefusal = false;
 
     while (true) {
       const { value, done } = await reader.read();
@@ -108,12 +110,20 @@ function ChatPage() {
             acc = obj.text;
           } else if (obj.type === "citations") {
             cits = obj.rows;
+          } else if (obj.type === "meta") {
+            isRefusal = !!obj.isRefusal;
+            if (isRefusal) cits = [];
           } else if (obj.type === "error") {
             acc = `Error: ${obj.message}`;
           }
           setMessages((m) => {
             const copy = [...m];
-            copy[copy.length - 1] = { role: "assistant", content: acc, citations: cits };
+            copy[copy.length - 1] = {
+              role: "assistant",
+              content: acc,
+              citations: isRefusal ? [] : cits,
+              isRefusal,
+            };
             return copy;
           });
         } catch {
@@ -151,7 +161,7 @@ function ChatPage() {
             >
               {m.content || (busy && i === messages.length - 1 ? "…" : "")}
             </div>
-            {m.citations && m.citations.length > 0 ? (
+            {!m.isRefusal && m.citations && m.citations.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1">
                 {m.citations.map((c, j) => (
                   <button
