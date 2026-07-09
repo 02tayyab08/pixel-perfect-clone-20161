@@ -60,6 +60,28 @@ function ChatPage() {
       });
 
     let res = await doRequest();
+    // Silent one-shot retry on 401: the server refreshes the Supabase session
+    // cookie in-place on the next call, so retrying transparently recovers
+    // from access-token expiry mid-session.
+    if (res.status === 401) {
+      await new Promise((r) => setTimeout(r, 150));
+      res = await doRequest();
+      if (res.status === 401) {
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = {
+            role: "assistant",
+            content: "Your session expired. Redirecting you to sign in…",
+          };
+          return copy;
+        });
+        setBusy(false);
+        setTimeout(() => {
+          window.location.href = "/auth/sign-in";
+        }, 1200);
+        return;
+      }
+    }
     // 409 setup-in-progress: poll gracefully.
     const started = Date.now();
     while (res.status === 409 && Date.now() - started < 30_000) {
@@ -266,7 +288,7 @@ function CitationPanel({
                 seg.mark ? (
                   <mark
                     key={i}
-                    className="rounded bg-primary/15 px-0.5 not-italic text-foreground"
+                    className="rounded bg-yellow-200 px-0.5 not-italic text-yellow-950 dark:bg-yellow-300/40 dark:text-yellow-50"
                   >
                     {seg.text}
                   </mark>
