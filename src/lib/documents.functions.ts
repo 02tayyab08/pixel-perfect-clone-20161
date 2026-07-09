@@ -441,3 +441,175 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
 
     return { ok: true as const, geminiSkipped };
   });
+
+/**
+ * Phase-3 backfill for `documents.file_search_document_name`.
+ *
+ * Some documents were indexed into Gemini File Search but the resource name
+ * never made it back into our row (e.g. the process-documents call crashed
+ * after upload but before `update_document_status`, or an older reset
+ * cleared the column). Without a resource name, `deleteDocumentFn` cannot
+ * target the Gemini side and would orphan the File Search document.
+ *
+ * Strategy: list every File Search document under the org's store, read its
+ * `customMetadata.document_id` (set at upload time), and — for each row that
+ * (a) belongs to this org, (b) has `file_search_document_name = NULL`, and
+ * (c) matches a listed document — write the resource name back onto the row.
+ *
+ * Safe to run repeatedly. Never deletes. Never overwrites a non-null
+ * `file_search_document_name`. Reports counts + a per-row summary so the
+ * caller can see exactly what happened.
+ */
+export const backfillFileSearchNamesFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => z.object({ orgId: z.string().uuid() }).parse(input))
+  .handler(async ({ data }) => {
+    const user = await requireCurrentUser();
+    await assertOrgMember(user.accessToken, data.orgId);
+
+    const svc = salniService();
+
+    // Resolve the store name for this org (may be the shared bootstrap store).
+    const orgRead = await svc
+      .from("organizations")
+      .select("id, file_search_store_name")
+      .eq("id", data.orgId)
+      .maybeSingle();
+    if (orgRead.error) {
+      return { ok: false as const, error: `organizations.select failed: ${orgRead.error.message}` };
+    }
+    if (!orgRead.data) return { ok: false as const, error: "Organization not found" };
+
+    let storeName: string;
+    try {
+      storeName = await bootstrapStore(orgRead.data.file_search_store_name ?? null);
+    } catch (e) {
+      return { ok: false as const, error: `store bootstrap failed: ${(e as Error).message}` };
+    }
+
+    // Load candidate rows: this org's documents missing a resource name.
+    const rowsRead = await svc
+      .from("documents")
+      .select("id, file_name, status, file_search_document_name")
+      .eq("organization_id", data.orgId)
+      .is("file_search_document_name", null);
+    if (rowsRead.error) {
+      return { ok: false as const, error: `documents.select failed: ${rowsRead.error.message}` };
+    }
+    const candidates = (rowsRead.data ?? []) as Array<{
+      id: string;
+      file_name: string | null;
+      status: string | null;
+      file_search_document_name: string | null;
+    }>;
+    if (candidates.length === 0) {
+      return {
+        ok: true as const,
+        storeName,
+        candidates: 0,
+        listed: 0,
+        matched: 0,
+        updated: 0,
+        updates: [] as Array<{ documentId: string; fileName: string | null; resourceName: string }>,
+      };
+    }
+    const wantedIds = new Set(candidates.map((r) => r.id));
+
+    // Page through every File Search document under this store.
+    const ai = gemini();
+    type FsDoc = {
+      name?: string;
+      displayName?: string;
+      customMetadata?: Array<{ key?: string; stringValue?: string }>;
+    };
+    const listed: FsDoc[] = [];
+    let pageToken: string | undefined = undefined;
+    let pages = 0;
+    try {
+      do {
+        const page = (await ai.fileSearchStores.documents.list({
+          parent: storeName,
+          config: { pageSize: 100, pageToken },
+        } as never)) as {
+          documents?: FsDoc[];
+          nextPageToken?: string;
+          page?: FsDoc[];
+        };
+        const batch = page.documents ?? page.page ?? [];
+        for (const d of batch) listed.push(d);
+        pageToken = page.nextPageToken;
+        pages++;
+        // Safety cap: 50 pages (~5k docs) per invocation.
+        if (pages >= 50) break;
+      } while (pageToken);
+    } catch (e) {
+      return {
+        ok: false as const,
+        error: `Gemini list failed: ${(e as Error).message}`,
+        listed: listed.length,
+      };
+    }
+
+    // Match by customMetadata.document_id → our row id.
+    const updates: Array<{ documentId: string; fileName: string | null; resourceName: string }> =
+      [];
+    const seen = new Set<string>();
+    for (const d of listed) {
+      const resourceName = d.name;
+      if (!resourceName) continue;
+      const docIdMeta = (d.customMetadata ?? []).find((m) => m.key === "document_id");
+      const docId = docIdMeta?.stringValue;
+      if (!docId || !wantedIds.has(docId) || seen.has(docId)) continue;
+      seen.add(docId);
+      const row = candidates.find((c) => c.id === docId);
+      updates.push({ documentId: docId, fileName: row?.file_name ?? null, resourceName });
+    }
+
+    // Apply updates one row at a time — small volumes, and we want per-row
+    // error visibility. Never overwrite a non-null value (defensive `.is()`).
+    let updated = 0;
+    const failures: Array<{ documentId: string; error: string }> = [];
+    for (const u of updates) {
+      const upd = await svc
+        .from("documents")
+        .update({ file_search_document_name: u.resourceName })
+        .eq("id", u.documentId)
+        .is("file_search_document_name", null);
+      if (upd.error) {
+        failures.push({ documentId: u.documentId, error: upd.error.message });
+        continue;
+      }
+      updated++;
+    }
+
+    // Best-effort audit entry.
+    try {
+      await svc.from("audit_log").insert({
+        organization_id: data.orgId,
+        actor_user_id: user.userId,
+        action: "documents.backfill_file_search_names",
+        entity_type: "organization",
+        entity_id: data.orgId,
+        metadata: {
+          store_name: storeName,
+          candidates: candidates.length,
+          listed: listed.length,
+          matched: updates.length,
+          updated,
+          failures,
+        },
+      });
+    } catch (e) {
+      console.warn("backfill: audit_log insert threw (non-fatal)", e);
+    }
+
+    return {
+      ok: true as const,
+      storeName,
+      candidates: candidates.length,
+      listed: listed.length,
+      matched: updates.length,
+      updated,
+      updates,
+      failures,
+    };
+  });
