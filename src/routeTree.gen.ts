@@ -18,6 +18,7 @@ import { Route as ApiSessionRouteImport } from './routes/api/session'
 import { Route as ApiQueryRouteImport } from './routes/api/query'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated.onboarding'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.app'
+import { Route as ApiPublicWidgetQueryRouteImport } from './routes/api/public/widget-query'
 import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
 import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
 import { Route as AuthenticatedAppSlugDocumentsRouteImport } from './routes/_authenticated.app.$slug.documents'
@@ -67,6 +68,11 @@ const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
   path: '/app',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const ApiPublicWidgetQueryRoute = ApiPublicWidgetQueryRouteImport.update({
+  id: '/api/public/widget-query',
+  path: '/api/public/widget-query',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicProcessDocumentsRoute =
   ApiPublicProcessDocumentsRouteImport.update({
     id: '/api/public/process-documents',
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
 }
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
 }
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/_authenticated/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/_authenticated/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
 }
@@ -148,6 +157,7 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/app/$slug'
     | '/api/public/process-documents'
+    | '/api/public/widget-query'
     | '/app/$slug/chat'
     | '/app/$slug/documents'
   fileRoutesByTo: FileRoutesByTo
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/app/$slug'
     | '/api/public/process-documents'
+    | '/api/public/widget-query'
     | '/app/$slug/chat'
     | '/app/$slug/documents'
   id:
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/_authenticated/app/$slug'
     | '/api/public/process-documents'
+    | '/api/public/widget-query'
     | '/_authenticated/app/$slug/chat'
     | '/_authenticated/app/$slug/documents'
   fileRoutesById: FileRoutesById
@@ -190,6 +202,7 @@ export interface RootRouteChildren {
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
   ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
+  ApiPublicWidgetQueryRoute: typeof ApiPublicWidgetQueryRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -256,6 +269,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app'
       preLoaderRoute: typeof AuthenticatedAppRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/api/public/widget-query': {
+      id: '/api/public/widget-query'
+      path: '/api/public/widget-query'
+      fullPath: '/api/public/widget-query'
+      preLoaderRoute: typeof ApiPublicWidgetQueryRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/process-documents': {
       id: '/api/public/process-documents'
@@ -335,6 +355,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
   ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
+  ApiPublicWidgetQueryRoute: ApiPublicWidgetQueryRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

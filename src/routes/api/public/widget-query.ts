@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { bootstrapStore } from "@/lib/store-bootstrap.server";
+import { Type } from "@google/genai";
 import { gemini, QUERY_MODEL } from "@/lib/gemini.server";
 import { salniService } from "@/lib/supabase.server";
 import { SetupInProgressError, isSetupInProgressPayload } from "@/lib/errors";
@@ -64,17 +65,17 @@ const CAPTURE_TOOL_DECL = {
       description:
         "Store a widget visitor's contact details after they consented in the immediately preceding assistant message. Use only when the visitor has provided at least one of email or phone.",
       parameters: {
-        type: "object",
+        type: Type.OBJECT,
         properties: {
-          full_name: { type: "string", description: "Visitor's name if provided" },
-          email: { type: "string", description: "Visitor's email if provided" },
-          phone: { type: "string", description: "Visitor's phone if provided" },
+          full_name: { type: Type.STRING, description: "Visitor's name if provided" },
+          email: { type: Type.STRING, description: "Visitor's email if provided" },
+          phone: { type: Type.STRING, description: "Visitor's phone if provided" },
           intent_summary: {
-            type: "string",
+            type: Type.STRING,
             description: "One-sentence summary of what the visitor is asking about",
           },
           consent_text: {
-            type: "string",
+            type: Type.STRING,
             description:
               "The verbatim consent sentence shown to the visitor in the prior assistant message. Must be non-empty.",
           },
