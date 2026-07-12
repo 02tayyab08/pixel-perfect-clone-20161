@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, redirect, useMatchRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { signOutFn } from "@/lib/auth.functions";
-import { FileText, LayoutDashboard, MessageSquare, LogOut } from "lucide-react";
+import { FileText, LayoutDashboard, MessageSquare, LogOut, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/app/$slug")({
@@ -26,11 +26,13 @@ function DashboardShell() {
     params: { slug: org.slug },
   });
   const isChat = !!matchRoute({ to: "/app/$slug/chat", params: { slug: org.slug } });
+  const isLeads = !!matchRoute({ to: "/app/$slug/leads", params: { slug: org.slug } });
 
   const nav = [
     { to: "/app/$slug", label: "Overview", icon: LayoutDashboard, end: true },
     { to: "/app/$slug/documents", label: "Documents", icon: FileText, end: false },
     { to: "/app/$slug/chat", label: "Chat", icon: MessageSquare, end: false },
+    { to: "/app/$slug/leads", label: "Leads", icon: Users, end: false },
   ] as const;
 
   async function onSignOut() {
@@ -85,7 +87,9 @@ function DashboardShell() {
             </Button>
           </div>
         </aside>
-        <main className="p-8">{isDocuments || isChat ? <Outlet /> : <Overview org={org} />}</main>
+        <main className="p-8">
+          {isDocuments || isChat || isLeads ? <Outlet /> : <Overview org={org} />}
+        </main>
       </div>
     </div>
   );

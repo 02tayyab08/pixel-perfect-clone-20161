@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as EmbedLoaderDotjsRouteImport } from './routes/embed-loader[.]js'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EmbedSlugRouteImport } from './routes/embed.$slug'
@@ -29,6 +30,11 @@ import { Route as AuthenticatedAppSlugChatRouteImport } from './routes/_authenti
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbedLoaderDotjsRoute = EmbedLoaderDotjsRouteImport.update({
+  id: '/embed-loader.js',
+  path: '/embed-loader.js',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -111,6 +117,7 @@ const AuthenticatedAppSlugChatRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/embed-loader.js': typeof EmbedLoaderDotjsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/embed-loader.js': typeof EmbedLoaderDotjsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/embed-loader.js': typeof EmbedLoaderDotjsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/embed-loader.js'
     | '/sitemap.xml'
     | '/app'
     | '/onboarding'
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/embed-loader.js'
     | '/sitemap.xml'
     | '/app'
     | '/onboarding'
@@ -201,6 +212,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/embed-loader.js'
     | '/sitemap.xml'
     | '/_authenticated/app'
     | '/_authenticated/onboarding'
@@ -220,6 +232,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  EmbedLoaderDotjsRoute: typeof EmbedLoaderDotjsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiQueryRoute: typeof ApiQueryRoute
   ApiSessionRoute: typeof ApiSessionRoute
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embed-loader.js': {
+      id: '/embed-loader.js'
+      path: '/embed-loader.js'
+      fullPath: '/embed-loader.js'
+      preLoaderRoute: typeof EmbedLoaderDotjsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -389,6 +409,7 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  EmbedLoaderDotjsRoute: EmbedLoaderDotjsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiQueryRoute: ApiQueryRoute,
   ApiSessionRoute: ApiSessionRoute,
