@@ -27,7 +27,7 @@ export const getEmbedOrgBySlugFn = createServerFn({ method: "GET" })
         id: org.id as string,
         name: (org.name as string) ?? "Assistant",
         slug: org.slug as string,
-        branding: (org.branding as Record<string, unknown> | null) ?? null,
+        branding: (org.branding as { [k: string]: string | number | boolean | null } | null) ?? null,
         allowedDomains: (org.allowed_domains as string[] | null) ?? null,
         defaultLocale: (org.default_locale as string | null) ?? "en",
       },
