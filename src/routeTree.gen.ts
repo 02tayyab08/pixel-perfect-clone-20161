@@ -24,6 +24,7 @@ import { Route as ApiPublicWidgetQueryRouteImport } from './routes/api/public/wi
 import { Route as ApiPublicWidgetHistoryRouteImport } from './routes/api/public/widget-history'
 import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
 import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
+import { Route as AuthenticatedAppSlugLeadsRouteImport } from './routes/_authenticated.app.$slug.leads'
 import { Route as AuthenticatedAppSlugDocumentsRouteImport } from './routes/_authenticated.app.$slug.documents'
 import { Route as AuthenticatedAppSlugChatRouteImport } from './routes/_authenticated.app.$slug.chat'
 
@@ -102,6 +103,12 @@ const AuthenticatedAppSlugRoute = AuthenticatedAppSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppSlugLeadsRoute =
+  AuthenticatedAppSlugLeadsRouteImport.update({
+    id: '/leads',
+    path: '/leads',
+    getParentRoute: () => AuthenticatedAppSlugRoute,
+  } as any)
 const AuthenticatedAppSlugDocumentsRoute =
   AuthenticatedAppSlugDocumentsRouteImport.update({
     id: '/documents',
@@ -132,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
+  '/app/$slug/leads': typeof AuthenticatedAppSlugLeadsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -150,6 +158,7 @@ export interface FileRoutesByTo {
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
+  '/app/$slug/leads': typeof AuthenticatedAppSlugLeadsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -170,6 +179,7 @@ export interface FileRoutesById {
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/_authenticated/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/_authenticated/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
+  '/_authenticated/app/$slug/leads': typeof AuthenticatedAppSlugLeadsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -190,6 +200,7 @@ export interface FileRouteTypes {
     | '/api/public/widget-query'
     | '/app/$slug/chat'
     | '/app/$slug/documents'
+    | '/app/$slug/leads'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/api/public/widget-query'
     | '/app/$slug/chat'
     | '/app/$slug/documents'
+    | '/app/$slug/leads'
   id:
     | '__root__'
     | '/'
@@ -227,6 +239,7 @@ export interface FileRouteTypes {
     | '/api/public/widget-query'
     | '/_authenticated/app/$slug/chat'
     | '/_authenticated/app/$slug/documents'
+    | '/_authenticated/app/$slug/leads'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -351,6 +364,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppSlugRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/$slug/leads': {
+      id: '/_authenticated/app/$slug/leads'
+      path: '/leads'
+      fullPath: '/app/$slug/leads'
+      preLoaderRoute: typeof AuthenticatedAppSlugLeadsRouteImport
+      parentRoute: typeof AuthenticatedAppSlugRoute
+    }
     '/_authenticated/app/$slug/documents': {
       id: '/_authenticated/app/$slug/documents'
       path: '/documents'
@@ -371,11 +391,13 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedAppSlugRouteChildren {
   AuthenticatedAppSlugChatRoute: typeof AuthenticatedAppSlugChatRoute
   AuthenticatedAppSlugDocumentsRoute: typeof AuthenticatedAppSlugDocumentsRoute
+  AuthenticatedAppSlugLeadsRoute: typeof AuthenticatedAppSlugLeadsRoute
 }
 
 const AuthenticatedAppSlugRouteChildren: AuthenticatedAppSlugRouteChildren = {
   AuthenticatedAppSlugChatRoute: AuthenticatedAppSlugChatRoute,
   AuthenticatedAppSlugDocumentsRoute: AuthenticatedAppSlugDocumentsRoute,
+  AuthenticatedAppSlugLeadsRoute: AuthenticatedAppSlugLeadsRoute,
 }
 
 const AuthenticatedAppSlugRouteWithChildren =
