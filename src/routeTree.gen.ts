@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EmbedSlugRouteImport } from './routes/embed.$slug'
 import { Route as AuthSignUpRouteImport } from './routes/auth.sign-up'
 import { Route as AuthSignInRouteImport } from './routes/auth.sign-in'
 import { Route as ApiSessionRouteImport } from './routes/api/session'
@@ -37,6 +38,11 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbedSlugRoute = EmbedSlugRouteImport.update({
+  id: '/embed/$slug',
+  path: '/embed/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthSignUpRoute = AuthSignUpRouteImport.update({
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
+  '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
+  '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
+  '/embed/$slug': typeof EmbedSlugRoute
   '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
@@ -164,6 +173,7 @@ export interface FileRouteTypes {
     | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
+    | '/embed/$slug'
     | '/app/$slug'
     | '/api/public/process-documents'
     | '/api/public/widget-history'
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
+    | '/embed/$slug'
     | '/app/$slug'
     | '/api/public/process-documents'
     | '/api/public/widget-history'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
+    | '/embed/$slug'
     | '/_authenticated/app/$slug'
     | '/api/public/process-documents'
     | '/api/public/widget-history'
@@ -213,6 +225,7 @@ export interface RootRouteChildren {
   ApiSessionRoute: typeof ApiSessionRoute
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
+  EmbedSlugRoute: typeof EmbedSlugRoute
   ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
   ApiPublicWidgetHistoryRoute: typeof ApiPublicWidgetHistoryRoute
   ApiPublicWidgetQueryRoute: typeof ApiPublicWidgetQueryRoute
@@ -239,6 +252,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embed/$slug': {
+      id: '/embed/$slug'
+      path: '/embed/$slug'
+      fullPath: '/embed/$slug'
+      preLoaderRoute: typeof EmbedSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/sign-up': {
@@ -374,6 +394,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSessionRoute: ApiSessionRoute,
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
+  EmbedSlugRoute: EmbedSlugRoute,
   ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
   ApiPublicWidgetHistoryRoute: ApiPublicWidgetHistoryRoute,
   ApiPublicWidgetQueryRoute: ApiPublicWidgetQueryRoute,

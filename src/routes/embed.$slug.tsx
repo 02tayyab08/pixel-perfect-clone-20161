@@ -22,13 +22,17 @@ type LoaderData = {
 
 export const Route = createFileRoute("/embed/$slug")({
   ssr: true,
-  head: ({ loaderData }) => ({
-    meta: [
-      { title: `${loaderData?.org?.name ?? "Assistant"} — Chat` },
-      { name: "robots", content: "noindex" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-    ],
-  }),
+  head: (ctx) => {
+    const data = (ctx as { loaderData?: LoaderData }).loaderData;
+    const name = data?.org?.name ?? "Assistant";
+    return {
+      meta: [
+        { title: `${name} — Chat` },
+        { name: "robots", content: "noindex" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+      ],
+    };
+  },
   loader: async ({ params }): Promise<LoaderData> => {
     const res = await getEmbedOrgBySlugFn({ data: { slug: params.slug } });
     if (!res.ok) {
