@@ -84,14 +84,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "White-label AI assistant that answers strictly from your business's own documents, with citations. Bilingual EN/AR.",
       },
       { name: "author", content: "Salni" },
-      { property: "og:title", content: "Salni — AI Knowledge Assistant" },
+      { property: "og:title", content: "Salni — AI Knowledge Assistant for UAE SMBs" },
       {
         property: "og:description",
         content:
-          "Grounded, cited answers from your own documents. Built for UAE SMBs. Bilingual EN/AR.",
+          "White-label AI assistant that answers strictly from your business's own documents, with citations. Bilingual EN/AR.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Salni — AI Knowledge Assistant for UAE SMBs" },
+      { name: "twitter:description", content: "White-label AI assistant that answers strictly from your business's own documents, with citations. Bilingual EN/AR." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/3190c797-3749-481d-a15f-d5991071fbec/id-preview-72330d19--630a3e42-fc47-4ca6-8422-2565286ac163.lovable.app-1783816926551.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/3190c797-3749-481d-a15f-d5991071fbec/id-preview-72330d19--630a3e42-fc47-4ca6-8422-2565286ac163.lovable.app-1783816926551.png" },
     ],
     links: [
       {
