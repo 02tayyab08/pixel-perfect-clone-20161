@@ -10,22 +10,32 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as EmbedLoaderDotjsRouteImport } from './routes/embed-loader[.]js'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EmbedSlugRouteImport } from './routes/embed.$slug'
 import { Route as AuthSignUpRouteImport } from './routes/auth.sign-up'
 import { Route as AuthSignInRouteImport } from './routes/auth.sign-in'
 import { Route as ApiSessionRouteImport } from './routes/api/session'
 import { Route as ApiQueryRouteImport } from './routes/api/query'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated.onboarding'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.app'
+import { Route as ApiPublicWidgetQueryRouteImport } from './routes/api/public/widget-query'
+import { Route as ApiPublicWidgetHistoryRouteImport } from './routes/api/public/widget-history'
 import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
 import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
+import { Route as AuthenticatedAppSlugLeadsRouteImport } from './routes/_authenticated.app.$slug.leads'
 import { Route as AuthenticatedAppSlugDocumentsRouteImport } from './routes/_authenticated.app.$slug.documents'
 import { Route as AuthenticatedAppSlugChatRouteImport } from './routes/_authenticated.app.$slug.chat'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbedLoaderDotjsRoute = EmbedLoaderDotjsRouteImport.update({
+  id: '/embed-loader.js',
+  path: '/embed-loader.js',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -35,6 +45,11 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbedSlugRoute = EmbedSlugRouteImport.update({
+  id: '/embed/$slug',
+  path: '/embed/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthSignUpRoute = AuthSignUpRouteImport.update({
@@ -67,6 +82,16 @@ const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
   path: '/app',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const ApiPublicWidgetQueryRoute = ApiPublicWidgetQueryRouteImport.update({
+  id: '/api/public/widget-query',
+  path: '/api/public/widget-query',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicWidgetHistoryRoute = ApiPublicWidgetHistoryRouteImport.update({
+  id: '/api/public/widget-history',
+  path: '/api/public/widget-history',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicProcessDocumentsRoute =
   ApiPublicProcessDocumentsRouteImport.update({
     id: '/api/public/process-documents',
@@ -78,6 +103,12 @@ const AuthenticatedAppSlugRoute = AuthenticatedAppSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppSlugLeadsRoute =
+  AuthenticatedAppSlugLeadsRouteImport.update({
+    id: '/leads',
+    path: '/leads',
+    getParentRoute: () => AuthenticatedAppSlugRoute,
+  } as any)
 const AuthenticatedAppSlugDocumentsRoute =
   AuthenticatedAppSlugDocumentsRouteImport.update({
     id: '/documents',
@@ -93,6 +124,7 @@ const AuthenticatedAppSlugChatRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/embed-loader.js': typeof EmbedLoaderDotjsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
@@ -100,13 +132,18 @@ export interface FileRoutesByFullPath {
   '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
+  '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
+  '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
+  '/app/$slug/leads': typeof AuthenticatedAppSlugLeadsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/embed-loader.js': typeof EmbedLoaderDotjsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
@@ -114,15 +151,20 @@ export interface FileRoutesByTo {
   '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
+  '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
+  '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
+  '/app/$slug/leads': typeof AuthenticatedAppSlugLeadsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/embed-loader.js': typeof EmbedLoaderDotjsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
@@ -130,15 +172,20 @@ export interface FileRoutesById {
   '/api/session': typeof ApiSessionRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-up': typeof AuthSignUpRoute
+  '/embed/$slug': typeof EmbedSlugRoute
   '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
+  '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/_authenticated/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
   '/_authenticated/app/$slug/documents': typeof AuthenticatedAppSlugDocumentsRoute
+  '/_authenticated/app/$slug/leads': typeof AuthenticatedAppSlugLeadsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/embed-loader.js'
     | '/sitemap.xml'
     | '/app'
     | '/onboarding'
@@ -146,13 +193,18 @@ export interface FileRouteTypes {
     | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
+    | '/embed/$slug'
     | '/app/$slug'
     | '/api/public/process-documents'
+    | '/api/public/widget-history'
+    | '/api/public/widget-query'
     | '/app/$slug/chat'
     | '/app/$slug/documents'
+    | '/app/$slug/leads'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/embed-loader.js'
     | '/sitemap.xml'
     | '/app'
     | '/onboarding'
@@ -160,14 +212,19 @@ export interface FileRouteTypes {
     | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
+    | '/embed/$slug'
     | '/app/$slug'
     | '/api/public/process-documents'
+    | '/api/public/widget-history'
+    | '/api/public/widget-query'
     | '/app/$slug/chat'
     | '/app/$slug/documents'
+    | '/app/$slug/leads'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/embed-loader.js'
     | '/sitemap.xml'
     | '/_authenticated/app'
     | '/_authenticated/onboarding'
@@ -175,21 +232,29 @@ export interface FileRouteTypes {
     | '/api/session'
     | '/auth/sign-in'
     | '/auth/sign-up'
+    | '/embed/$slug'
     | '/_authenticated/app/$slug'
     | '/api/public/process-documents'
+    | '/api/public/widget-history'
+    | '/api/public/widget-query'
     | '/_authenticated/app/$slug/chat'
     | '/_authenticated/app/$slug/documents'
+    | '/_authenticated/app/$slug/leads'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  EmbedLoaderDotjsRoute: typeof EmbedLoaderDotjsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiQueryRoute: typeof ApiQueryRoute
   ApiSessionRoute: typeof ApiSessionRoute
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
+  EmbedSlugRoute: typeof EmbedSlugRoute
   ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
+  ApiPublicWidgetHistoryRoute: typeof ApiPublicWidgetHistoryRoute
+  ApiPublicWidgetQueryRoute: typeof ApiPublicWidgetQueryRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -199,6 +264,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embed-loader.js': {
+      id: '/embed-loader.js'
+      path: '/embed-loader.js'
+      fullPath: '/embed-loader.js'
+      preLoaderRoute: typeof EmbedLoaderDotjsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -213,6 +285,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embed/$slug': {
+      id: '/embed/$slug'
+      path: '/embed/$slug'
+      fullPath: '/embed/$slug'
+      preLoaderRoute: typeof EmbedSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/sign-up': {
@@ -257,6 +336,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/public/widget-query': {
+      id: '/api/public/widget-query'
+      path: '/api/public/widget-query'
+      fullPath: '/api/public/widget-query'
+      preLoaderRoute: typeof ApiPublicWidgetQueryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/widget-history': {
+      id: '/api/public/widget-history'
+      path: '/api/public/widget-history'
+      fullPath: '/api/public/widget-history'
+      preLoaderRoute: typeof ApiPublicWidgetHistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/process-documents': {
       id: '/api/public/process-documents'
       path: '/api/public/process-documents'
@@ -270,6 +363,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/$slug'
       preLoaderRoute: typeof AuthenticatedAppSlugRouteImport
       parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/_authenticated/app/$slug/leads': {
+      id: '/_authenticated/app/$slug/leads'
+      path: '/leads'
+      fullPath: '/app/$slug/leads'
+      preLoaderRoute: typeof AuthenticatedAppSlugLeadsRouteImport
+      parentRoute: typeof AuthenticatedAppSlugRoute
     }
     '/_authenticated/app/$slug/documents': {
       id: '/_authenticated/app/$slug/documents'
@@ -291,11 +391,13 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedAppSlugRouteChildren {
   AuthenticatedAppSlugChatRoute: typeof AuthenticatedAppSlugChatRoute
   AuthenticatedAppSlugDocumentsRoute: typeof AuthenticatedAppSlugDocumentsRoute
+  AuthenticatedAppSlugLeadsRoute: typeof AuthenticatedAppSlugLeadsRoute
 }
 
 const AuthenticatedAppSlugRouteChildren: AuthenticatedAppSlugRouteChildren = {
   AuthenticatedAppSlugChatRoute: AuthenticatedAppSlugChatRoute,
   AuthenticatedAppSlugDocumentsRoute: AuthenticatedAppSlugDocumentsRoute,
+  AuthenticatedAppSlugLeadsRoute: AuthenticatedAppSlugLeadsRoute,
 }
 
 const AuthenticatedAppSlugRouteWithChildren =
@@ -329,23 +431,17 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  EmbedLoaderDotjsRoute: EmbedLoaderDotjsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiQueryRoute: ApiQueryRoute,
   ApiSessionRoute: ApiSessionRoute,
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
+  EmbedSlugRoute: EmbedSlugRoute,
   ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
+  ApiPublicWidgetHistoryRoute: ApiPublicWidgetHistoryRoute,
+  ApiPublicWidgetQueryRoute: ApiPublicWidgetQueryRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
