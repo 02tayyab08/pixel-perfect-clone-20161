@@ -1,0 +1,43 @@
+# Salni — Cursor rules (save this file as `.cursorrules` in the repo root)
+
+## Schema is law
+- `02_FINAL_SCHEMA_V3.sql` is the single source of truth for the database (supersedes V2_1).
+- NEVER invent, rename, or assume a table, column, enum value, RPC name, or RPC parameter. Verify every reference against that file before writing code.
+- If code needs something the schema doesn't have: STOP and say so. Do not add columns, do not work around it, do not alter the DB. Schema changes are made in that file first, then applied by the operator.
+- Error 42703 (undefined column) or 42P01 (undefined table) means the CODE is wrong, not the schema. Fix the code.
+- Error 42501 (permission denied for table) means a missing GRANT (see the V3 grants section) — it is NOT an RLS issue; grants sit one layer below RLS. service_role bypasses RLS but still needs grants.
+
+## Known past failures — never repeat
+- audit_log uses entity_type / entity_id (NOT target_type / target_id).
+- conversation_channel enum is ('text','voice') only. There is NO 'widget' value. Widget conversations use channel 'text'; widget turns are identified by started_by IS NULL + end_user_ref set.
+- organizations has brand_color and logo_url. There is NO primary_color, NO logo, and NO composite `branding` column (a phantom `branding` select caused a fake 404 on /embed/:slug).
+- upsert_lead signature is exactly: (p_org, p_conversation, p_full_name, p_email, p_phone, p_company, p_notes, p_consent_text, p_ip) returns uuid. There is NO p_consent_given / p_consent_at / p_end_user_ref — the function sets consent internally. Raises LEAD_NO_CONTACT if email and phone are both empty. On unique_violation (23505), retry once.
+- There is NO conversations.lead_capture_asked and NO messages.meta. "Already asked" is derived: an existing lead linked to the conversation, or a stored assistant message containing the consent-template sentinel.
+- Gemini File Search: document deletion requires force:true (else 400 FAILED_PRECONDITION). documents.list page_size max is 20. chunkingConfig applies at ingestion only. operations.get can complete without response.name → file_search_document_name may be null and needs the backfill (match customMetadata.document_id).
+- gemini-2.5-flash streams thought parts: keep thinkingConfig.includeThoughts=false AND the per-part thought filter in every generateContentStream consumer.
+
+## Security invariants
+- Secrets are server-side only: GEMINI_API_KEY, IP_HASH_SALT, CRON_WEBHOOK_SECRET, SALNI_SUPABASE_SERVICE_ROLE_KEY must never reach the client bundle.
+- Anonymous widget traffic reaches data ONLY through service-role server functions. No Supabase client in the widget browser code. No Realtime in the widget (anonymous users have no RLS grants; a widget Realtime subscription silently fails).
+- The staff path /api/query must NEVER declare the capture_lead tool. Lead capture exists only on /api/public/widget-query, and only when organizations.lead_capture_enabled is true.
+- The File Search metadataFilter org id is resolved SERVER-SIDE from the slug/membership. Never trust a client-supplied org id for retrieval scoping.
+- Never use the service role for user-facing reads (e.g. "which orgs does this user belong to") — those must run as the authenticated user so RLS applies. Service role is for privileged writes/processing only.
+- The widget-query gate chain runs BEFORE any Gemini call, in this order: is_active → Origin vs allowed_domains (null = allow all) → check_rate_limit(org,'ref:'+endUserRef,20) → check_org_hourly_ceiling(org,300) → check_rate_limit(org,'ip:'+sha256(ip+IP_HASH_SALT),120). A limiter returning FALSE = throttle message with zero Gemini spend. A limiter THROWING = a real error — surface it, never disguise an RPC error as a throttle.
+- record_query_usage(org) is called once per answered turn (staff and widget alike).
+
+## Product constants — do not alter
+- Refusal string, exactly: "I don't have that in the provided documents."
+- Throttle message: "We're experiencing high demand — please try again in a little while."
+- Unavailable message: "This assistant is currently unavailable."
+- Retrieval is SINGLE-TURN by design (V1): only the current question (plus expansion terms) goes to File Search — never prior turns. Conversational follow-up rewriting is a V2 feature; do not add it ad hoc.
+- Consent is single-step: the ask message folds consent in, and the EXACT rendered sentence is stored verbatim as consent_text. Never store a lead without it.
+- Refusal turns never emit citations and never trigger lead capture.
+
+## Error handling
+- Never swallow errors into generic messages. Surface code + message. Masked errors repeatedly hid real bugs in this project (a mapped-to-404 loader error, a silently failing audit insert, a throttle message covering RPC failures).
+- Streaming responses must never leave a stuck spinner: every failure path emits a user-visible state.
+
+## Workflow
+- Lovable is used for planning only; Cursor is the only writer of code. Before implementing any externally-produced plan, verify its assumptions (file existence, column names, RPC signatures) against this repo and the schema file — build reports have drifted from reality before.
+- Commit and push in small, labeled increments. Pull before starting work in case anything else touched the repo.
+- Local dev: secrets live in .env.local (never committed). Test on the local server first; production logs have a short retention window.
