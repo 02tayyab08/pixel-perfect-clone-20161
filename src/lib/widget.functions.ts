@@ -5,29 +5,59 @@ import { salniAsUser, salniService } from "./supabase.server";
 
 /**
  * Public — returns the branding + operational flags a widget needs to render
- * for an anonymous visitor. No auth. Returns null when the org doesn't exist
- * or is disabled, so the embed route can render a friendly unavailable state.
+ * for an anonymous visitor. No auth. Distinguishes genuine missing slugs from
+ * Supabase/infra errors so the embed route does not surface a false 404.
+ *
+ * organizations has NO `branding` jsonb column — brand fields are scalars.
+ * We select real columns and assemble a branding object in code for the UI.
  */
-export const getEmbedOrgBySlugFn = createServerFn({ method: "GET" })
+export const getEmbedOrgBySlugFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ slug: z.string().min(1).max(64) }).parse(input))
   .handler(async ({ data }) => {
     const svc = salniService();
     const { data: org, error } = await svc
       .from("organizations")
-      .select("id, name, slug, is_active, branding, allowed_domains, default_locale")
+      .select(
+        "id, name, slug, is_active, assistant_name, brand_color, logo_url, default_locale, allowed_domains",
+      )
       .eq("slug", data.slug)
       .maybeSingle();
-    if (error || !org) return { ok: false as const, reason: "not_found" as const };
-    if (org.is_active === false) {
-      return { ok: false as const, reason: "inactive" as const, name: org.name };
+
+    if (error) {
+      console.error(
+        `[embed] getEmbedOrgBySlug slug=${data.slug} supabaseErr=${error.message} code=${(error as { code?: string }).code ?? ""}`,
+      );
+      return {
+        ok: false as const,
+        reason: "error" as const,
+        message: error.message,
+      };
     }
+    if (!org) {
+      console.log(`[embed] getEmbedOrgBySlug slug=${data.slug} reason=not_found`);
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (org.is_active === false) {
+      console.log(`[embed] getEmbedOrgBySlug slug=${data.slug} reason=inactive`);
+      return { ok: false as const, reason: "inactive" as const, name: org.name as string };
+    }
+
+    // Constructed in code — not a DB column.
+    const branding = {
+      assistant_name: (org.assistant_name as string | null) ?? null,
+      brand_color: (org.brand_color as string | null) ?? null,
+      logo_url: (org.logo_url as string | null) ?? null,
+    };
+    console.log(
+      `[embed] getEmbedOrgBySlug slug=${data.slug} orgId=${org.id} ok=true`,
+    );
     return {
       ok: true as const,
       org: {
         id: org.id as string,
         name: (org.name as string) ?? "Assistant",
         slug: org.slug as string,
-        branding: (org.branding as { [k: string]: string | number | boolean | null } | null) ?? null,
+        branding,
         allowedDomains: (org.allowed_domains as string[] | null) ?? null,
         defaultLocale: (org.default_locale as string | null) ?? "en",
       },

@@ -29,6 +29,28 @@ applicable fee separately with its exact label and figure and one-sentence
 applicability note. If the exact label the user asks about is not in the
 retrieved documents, refuse using the standard refusal string.`;
 
+function greetingCarveOut(tenantName: string): string {
+  return `If the visitor sends a greeting or small talk containing no factual question, reply with one short, friendly sentence welcoming them and inviting them to ask about ${tenantName}'s services. Never use the refusal string for greetings. All factual answers remain strictly grounded in the documents — never answer a factual question from outside the documents.`;
+}
+
+/** True when the visitor message is greeting/small-talk with no factual ask. */
+function isGreetingOrSmallTalk(message: string): boolean {
+  const t = message.trim();
+  if (!t || t.length > 80) return false;
+  // Factual cues → not a greeting carve-out.
+  if (/[?؟]/.test(t)) return false;
+  if (
+    /\b(what|what's|whats|when|where|which|who|why|how|price|cost|fee|visa|document|require|can i|do you|tell me|explain)\b/i.test(
+      t,
+    )
+  ) {
+    return false;
+  }
+  return /^(hi|hello|hey|yo|sup|good\s*(morning|afternoon|evening)|thanks|thank you|مرحبا|أهلا|اهلا|السلام\s*عليكم|صباح\s*الخير|مساء\s*الخير|شكرا)([\s!,.…]|$)/i.test(
+    t,
+  );
+}
+
 function leadCaptureAddendum(tenantName: string, alreadyAsked: boolean): string {
   return `LEAD CAPTURE (widget only)
 
@@ -104,11 +126,20 @@ export const Route = createFileRoute("/api/public/widget-query")({
         const { data: org, error: orgErr } = await svc
           .from("organizations")
           .select(
-            "id, name, is_active, system_instruction, file_search_store_name, allowed_domains",
+            "id, name, is_active, system_instruction, file_search_store_name, allowed_domains, lead_capture_enabled",
           )
           .eq("id", parsed.orgId)
           .maybeSingle();
         if (orgErr || !org) return new Response("Not Found", { status: 404 });
+
+        const leadCaptureEnabled = org.lead_capture_enabled !== false;
+
+        console.log(
+          `[widget-query] gate inputs orgId=${parsed.orgId} endUserRef=${JSON.stringify(parsed.endUserRef)} ` +
+            `origin=${JSON.stringify(request.headers.get("origin"))} ` +
+            `allowedDomains=${JSON.stringify(org.allowed_domains)} ` +
+            `is_active=${org.is_active}`,
+        );
 
         // MANDATORY gates BEFORE any Gemini spend.
         const gate = await runWidgetGates({
@@ -119,7 +150,13 @@ export const Route = createFileRoute("/api/public/widget-query")({
           endUserRef: parsed.endUserRef,
           ip: extractIp(request.headers),
         });
-        if (!gate.ok) return new Response(gate.message, { status: gate.status });
+        if (!gate.ok) {
+          console.error(
+            `[widget-query] gate FAILED reason=${gate.reason} status=${gate.status} message=${gate.message}`,
+          );
+          return new Response(gate.message, { status: gate.status });
+        }
+        console.log(`[widget-query] gate PASSED orgId=${parsed.orgId}`);
 
         let storeName: string;
         try {
@@ -142,23 +179,25 @@ export const Route = createFileRoute("/api/public/widget-query")({
         let alreadyHasLead = false;
 
         if (conversationId) {
-          // Detect prior consent ask + prior lead.
-          const [{ data: prior }, { data: existingLead }] = await Promise.all([
-            svc
-              .from("messages")
-              .select("id")
-              .eq("conversation_id", conversationId)
-              .eq("role", "assistant")
-              .ilike("content", `%${CONSENT_SENTINEL}%`)
-              .limit(1),
-            svc
-              .from("leads")
-              .select("id")
-              .eq("conversation_id", conversationId)
-              .limit(1),
-          ]);
-          alreadyAskedLead = (prior?.length ?? 0) > 0;
-          alreadyHasLead = (existingLead?.length ?? 0) > 0;
+          if (leadCaptureEnabled) {
+            // Detect prior consent ask + prior lead.
+            const [{ data: prior }, { data: existingLead }] = await Promise.all([
+              svc
+                .from("messages")
+                .select("id")
+                .eq("conversation_id", conversationId)
+                .eq("role", "assistant")
+                .ilike("content", `%${CONSENT_SENTINEL}%`)
+                .limit(1),
+              svc
+                .from("leads")
+                .select("id")
+                .eq("conversation_id", conversationId)
+                .limit(1),
+            ]);
+            alreadyAskedLead = (prior?.length ?? 0) > 0;
+            alreadyHasLead = (existingLead?.length ?? 0) > 0;
+          }
         } else {
           const { data: conv, error: convErr } = await svc
             .from("conversations")
@@ -202,30 +241,53 @@ export const Route = createFileRoute("/api/public/widget-query")({
             let streamErrored = false;
             let capturedCall: { name: string; args: Record<string, unknown> } | null = null;
 
-            const tools = [
+            const tools: Array<
+              | { fileSearch: { fileSearchStoreNames: string[]; metadataFilter: string } }
+              | typeof CAPTURE_TOOL_DECL
+            > = [
               {
                 fileSearch: {
                   fileSearchStoreNames: [storeName],
                   metadataFilter: `org_id="${org.id}"`,
                 },
               },
-              CAPTURE_TOOL_DECL,
             ];
+            if (leadCaptureEnabled) {
+              tools.push(CAPTURE_TOOL_DECL);
+            }
+            console.log(
+              `[widget-query] leadCaptureEnabled=${leadCaptureEnabled} tools=${JSON.stringify(
+                tools.map((t) =>
+                  "fileSearch" in t
+                    ? { fileSearch: { store: storeName, filter: `org_id="${org.id}"` } }
+                    : {
+                        functionDeclarations: (
+                          t as { functionDeclarations?: Array<{ name?: string }> }
+                        ).functionDeclarations?.map((d) => d.name),
+                      },
+                ),
+              )}`,
+            );
 
             const localeNote =
               parsed.locale === "ar"
                 ? "\n\nRespond in Arabic (the visitor is using the Arabic UI)."
                 : "";
 
-            const systemInstruction =
+            let systemInstruction =
               (org.system_instruction ||
                 `You answer strictly from the provided documents. If the answer is not in them, reply exactly: "${NOT_IN_DOCS}"`) +
               "\n\n" +
-              FEE_DISAMBIGUATION_ADDENDUM +
+              greetingCarveOut(tenantName) +
               "\n\n" +
-              leadCaptureAddendum(tenantName, captureSuppressed) +
-              localeNote;
+              FEE_DISAMBIGUATION_ADDENDUM;
+            if (leadCaptureEnabled) {
+              systemInstruction +=
+                "\n\n" + leadCaptureAddendum(tenantName, captureSuppressed);
+            }
+            systemInstruction += localeNote;
 
+            let sawFunctionCall = false;
             try {
               const ai = gemini();
               const iter = await ai.models.generateContentStream({
@@ -242,11 +304,17 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 const parts = (chunk.candidates?.[0]?.content?.parts ?? []) as Part[];
                 for (const part of parts) {
                   if (part.thought) continue;
-                  if (part.functionCall && part.functionCall.name === "capture_lead") {
-                    capturedCall = {
-                      name: "capture_lead",
-                      args: part.functionCall.args ?? {},
-                    };
+                  if (part.functionCall) {
+                    sawFunctionCall = true;
+                    console.log(
+                      `[widget-query] functionCall name=${part.functionCall.name ?? "(unknown)"}`,
+                    );
+                    if (part.functionCall.name === "capture_lead") {
+                      capturedCall = {
+                        name: "capture_lead",
+                        args: part.functionCall.args ?? {},
+                      };
+                    }
                     continue;
                   }
                   const text = part.text ?? "";
@@ -259,6 +327,9 @@ export const Route = createFileRoute("/api/public/widget-query")({
                   groundingChunks = gm.groundingChunks;
                 }
               }
+              console.log(
+                `[widget-query] stream done sawFunctionCall=${sawFunctionCall} capturedLead=${!!capturedCall}`,
+              );
             } catch (e) {
               const err = e as { name?: string; message?: string; status?: number };
               console.error(
@@ -276,13 +347,21 @@ export const Route = createFileRoute("/api/public/widget-query")({
             }
 
             // Grounding miss → override with refusal string.
-            if (!streamErrored && fullText.trim().length > 0 && groundingChunks.length === 0) {
+            // Greeting/small-talk carve-out: allow a short ungrounded welcome.
+            const greetingTurn = isGreetingOrSmallTalk(parsed.message);
+            if (
+              !streamErrored &&
+              !greetingTurn &&
+              fullText.trim().length > 0 &&
+              groundingChunks.length === 0
+            ) {
               fullText = NOT_IN_DOCS;
               send({ type: "override", text: fullText });
             }
 
             const isRefusal =
               !streamErrored &&
+              !greetingTurn &&
               (fullText.trim() === NOT_IN_DOCS || groundingChunks.length === 0);
             send({ type: "meta", isRefusal });
 
@@ -298,7 +377,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 controller.close();
                 return;
               }
-              const { data: msgRow } = await svc
+              const { data: msgRow, error: msgErr } = await svc
                 .from("messages")
                 .insert({
                   conversation_id: conversationId,
@@ -311,6 +390,10 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 })
                 .select("id")
                 .single();
+
+              console.log(
+                `[widget-query] persist assistant msgId=${msgRow?.id ?? "null"} convId=${conversationId} endUserRef=${parsed.endUserRef} err=${msgErr?.message ?? "null"}`,
+              );
 
               if (msgRow?.id && !isRefusal && groundingChunks.length > 0) {
                 const rows = groundingChunks
@@ -353,8 +436,8 @@ export const Route = createFileRoute("/api/public/widget-query")({
               // Per-answered-turn usage record.
               await svc.rpc("record_query_usage", { p_org: parsed.orgId });
 
-              // Lead capture — only after refusal guard cleared it.
-              if (capturedCall && !alreadyHasLead) {
+              // Lead capture — only when enabled and after refusal guard cleared it.
+              if (leadCaptureEnabled && capturedCall && !alreadyHasLead) {
                 const args = capturedCall.args as {
                   full_name?: string;
                   email?: string;
@@ -395,7 +478,10 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 }
               }
             } catch (e) {
-              console.error("[widget-query] persist failed", e);
+              const errMsg = e instanceof Error ? e.message : String(e);
+              console.error(
+                `[widget-query] persist assistant msgId=null convId=${conversationId} endUserRef=${parsed.endUserRef} err=${errMsg}`,
+              );
             }
 
             send({ type: "done" });

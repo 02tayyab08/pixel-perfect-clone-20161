@@ -9,22 +9,29 @@ type Msg = {
   citations?: Array<{ source_title: string | null; page: number | null; snippet?: string | null }>;
 };
 
+type OrgBranding = {
+  assistant_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+} | null;
+
 type LoaderData = {
   org: {
     id: string;
     name: string;
     slug: string;
-    branding: { [k: string]: string | number | boolean | null } | null;
+    branding: OrgBranding;
     defaultLocale: string;
   };
   inactive?: { name: string };
+  loadError?: string;
 };
 
 export const Route = createFileRoute("/embed/$slug")({
   ssr: true,
   head: (ctx) => {
     const data = (ctx as { loaderData?: LoaderData }).loaderData;
-    const name = data?.org?.name ?? "Assistant";
+    const name = data?.org?.branding?.assistant_name ?? data?.org?.name ?? "Assistant";
     return {
       meta: [
         { title: `${name} — Chat` },
@@ -48,6 +55,19 @@ export const Route = createFileRoute("/embed/$slug")({
           inactive: { name: res.name ?? "Assistant" },
         };
       }
+      if (res.reason === "error") {
+        console.error(`[embed] loader slug=${params.slug} loadError=${res.message}`);
+        return {
+          org: {
+            id: "",
+            name: "Assistant",
+            slug: params.slug,
+            branding: null,
+            defaultLocale: "en",
+          },
+          loadError: res.message,
+        };
+      }
       throw notFound();
     }
     return { org: res.org };
@@ -56,15 +76,10 @@ export const Route = createFileRoute("/embed/$slug")({
 });
 
 function EmbedPage() {
-  const { org, inactive } = Route.useLoaderData();
-  const primary =
-    (org.branding && typeof org.branding["primary_color"] === "string"
-      ? (org.branding["primary_color"] as string)
-      : null) ?? "#111827";
-  const logo =
-    org.branding && typeof org.branding["logo_url"] === "string"
-      ? (org.branding["logo_url"] as string)
-      : null;
+  const { org, inactive, loadError } = Route.useLoaderData() as LoaderData;
+  const primary = org.branding?.brand_color?.trim() || "#111827";
+  const logo = org.branding?.logo_url?.trim() || null;
+  const displayName = org.branding?.assistant_name?.trim() || org.name;
 
   const [locale, setLocale] = useState<"en" | "ar">(
     (org.defaultLocale === "ar" ? "ar" : "en") as "en" | "ar",
@@ -78,12 +93,14 @@ function EmbedPage() {
 
   // Boot: end_user_ref + saved locale, rehydrate last conversation.
   useEffect(() => {
-    if (inactive || !org.id) return;
+    if (inactive || loadError || !org.id) return;
     const lsKey = `salni.eur.${org.id}`;
     let ref = localStorage.getItem(lsKey);
+    console.log(`[embed] localStorage ${lsKey}=${ref ?? "(null)"}`);
     if (!ref) {
       ref = crypto.randomUUID();
       localStorage.setItem(lsKey, ref);
+      console.log(`[embed] generated endUserRef=${ref}`);
     }
     setEndUserRef(ref);
     const savedLocale = localStorage.getItem(`salni.locale.${org.id}`);
@@ -106,7 +123,7 @@ function EmbedPage() {
         }
       })
       .catch(() => undefined);
-  }, [org.id, inactive]);
+  }, [org.id, inactive, loadError]);
 
   useEffect(() => {
     if (org.id) localStorage.setItem(`salni.locale.${org.id}`, locale);
@@ -123,12 +140,14 @@ function EmbedPage() {
             placeholder: "اسأل سؤالاً…",
             send: "إرسال",
             unavailable: "هذا المساعد غير متاح حالياً.",
+            loadError: "تعذر تحميل المساعد. حاول مرة أخرى لاحقاً.",
             hint: "الإجابات تعتمد فقط على مستندات الشركة.",
           }
         : {
             placeholder: "Ask a question…",
             send: "Send",
             unavailable: "This assistant is currently unavailable.",
+            loadError: "This assistant could not be loaded. Please try again later.",
             hint: "Answers come only from the business's own documents.",
           },
     [locale],
@@ -222,6 +241,20 @@ function EmbedPage() {
     setBusy(false);
   }
 
+  if (loadError) {
+    return (
+      <div
+        dir={locale === "ar" ? "rtl" : "ltr"}
+        className="flex min-h-screen items-center justify-center bg-white p-6 text-slate-800"
+      >
+        <div className="max-w-sm text-center">
+          <h1 className="text-lg font-semibold">{displayName}</h1>
+          <p className="mt-2 text-sm text-slate-500">{t.loadError}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (inactive) {
     return (
       <div
@@ -254,10 +287,10 @@ function EmbedPage() {
               className="grid h-6 w-6 place-items-center rounded text-xs font-semibold text-white"
               style={{ background: primary }}
             >
-              {org.name.slice(0, 1).toUpperCase()}
+              {displayName.slice(0, 1).toUpperCase()}
             </span>
           )}
-          <span className="text-sm font-semibold">{org.name}</span>
+          <span className="text-sm font-semibold">{displayName}</span>
         </div>
         <button
           type="button"

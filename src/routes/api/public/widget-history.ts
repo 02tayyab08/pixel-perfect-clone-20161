@@ -36,6 +36,9 @@ export const Route = createFileRoute("/api/public/widget-history")({
 
         const conv = convs?.[0];
         if (!conv) {
+          console.log(
+            `[widget-history] orgId=${parsed.data.orgId} endUserRef=${parsed.data.endUserRef} convFound=false msgCount=0`,
+          );
           return Response.json({ conversationId: null, messages: [] });
         }
 
@@ -46,8 +49,13 @@ export const Route = createFileRoute("/api/public/widget-history")({
           .order("created_at", { ascending: true })
           .limit(200);
 
+        const messages = msgs ?? [];
+        console.log(
+          `[widget-history] orgId=${parsed.data.orgId} endUserRef=${parsed.data.endUserRef} convFound=true msgCount=${messages.length}`,
+        );
+
         return Response.json(
-          { conversationId: conv.id, messages: msgs ?? [] },
+          { conversationId: conv.id, messages },
           {
             headers: {
               "access-control-allow-origin": request.headers.get("origin") ?? "*",

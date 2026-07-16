@@ -50,7 +50,8 @@ export type ThrottleReason =
   | "org_hourly"
   | "ip_rate"
   | "inactive"
-  | "origin";
+  | "origin"
+  | "rpc_error";
 
 export type GateResult =
   | { ok: true }
@@ -63,6 +64,9 @@ const THROTTLE_MSG =
  * MANDATORY gate chain before any Gemini spend on the widget path:
  *   is_active → Origin vs allowed_domains → ref rate → org hourly ceiling → ip rate
  * Any failure short-circuits with zero downstream Gemini cost.
+ *
+ * RPC failures are returned as reason:"rpc_error" (status 500) — never as a
+ * throttle — so infra mistakes are not masked behind THROTTLE_MSG.
  */
 export async function runWidgetGates(args: {
   orgId: string;
@@ -72,7 +76,16 @@ export async function runWidgetGates(args: {
   endUserRef: string;
   ip: string;
 }): Promise<GateResult> {
-  if (!args.isActive) {
+  console.log(
+    `[widget-gates] start orgId=${args.orgId} endUserRef=${JSON.stringify(args.endUserRef)} ` +
+      `endUserRefType=${typeof args.endUserRef} origin=${JSON.stringify(args.originHeader)} ` +
+      `allowedDomains=${JSON.stringify(args.allowedDomains)} ip=${JSON.stringify(args.ip)}`,
+  );
+
+  // 1. is_active
+  const activeOk = args.isActive === true;
+  console.log(`[widget-gates] is_active input=${args.isActive} ok=${activeOk}`);
+  if (!activeOk) {
     return {
       ok: false,
       reason: "inactive",
@@ -81,7 +94,13 @@ export async function runWidgetGates(args: {
     };
   }
 
-  if (!originAllowed(args.originHeader, args.allowedDomains)) {
+  // 2. allowed_domains / Origin
+  const originOk = originAllowed(args.originHeader, args.allowedDomains);
+  console.log(
+    `[widget-gates] origin check origin=${JSON.stringify(args.originHeader)} ` +
+      `allowedDomains=${JSON.stringify(args.allowedDomains)} ok=${originOk}`,
+  );
+  if (!originOk) {
     return {
       ok: false,
       reason: "origin",
@@ -91,47 +110,89 @@ export async function runWidgetGates(args: {
   }
 
   const svc = salniService();
-  const refKey = `ref:${args.endUserRef}`;
+
+  // 3. check_rate_limit(ref)
+  const refSubject = `ref:${args.endUserRef}`;
   const { data: refOk, error: refErr } = await svc.rpc("check_rate_limit", {
     p_org: args.orgId,
-    p_key: refKey,
+    p_subject: refSubject,
     p_limit: 20,
   });
   if (refErr) {
-    console.error("[widget-gates] check_rate_limit(ref) failed", refErr);
-    return { ok: false, reason: "ref_rate", status: 429, message: THROTTLE_MSG };
+    console.error(
+      `[widget-gates] check_rate_limit(ref) RPC_ERROR subject=${refSubject} limit=20 ` +
+        `err=${refErr.message} code=${(refErr as { code?: string }).code ?? ""} ` +
+        `hint=${(refErr as { hint?: string }).hint ?? ""}`,
+    );
+    return {
+      ok: false,
+      reason: "rpc_error",
+      status: 500,
+      message: `Rate-limit check failed (ref): ${refErr.message}`,
+    };
   }
+  console.log(
+    `[widget-gates] check_rate_limit(ref) subject=${refSubject} limit=20 result=${JSON.stringify(refOk)} ok=${refOk !== false}`,
+  );
   if (refOk === false) {
     return { ok: false, reason: "ref_rate", status: 429, message: THROTTLE_MSG };
   }
 
+  // 4. check_org_hourly_ceiling
   const { data: orgOk, error: orgErr } = await svc.rpc("check_org_hourly_ceiling", {
     p_org: args.orgId,
     p_limit: 300,
   });
   if (orgErr) {
-    console.error("[widget-gates] check_org_hourly_ceiling failed", orgErr);
-    return { ok: false, reason: "org_hourly", status: 429, message: THROTTLE_MSG };
+    console.error(
+      `[widget-gates] check_org_hourly_ceiling RPC_ERROR orgId=${args.orgId} limit=300 ` +
+        `err=${orgErr.message} code=${(orgErr as { code?: string }).code ?? ""} ` +
+        `hint=${(orgErr as { hint?: string }).hint ?? ""}`,
+    );
+    return {
+      ok: false,
+      reason: "rpc_error",
+      status: 500,
+      message: `Hourly ceiling check failed: ${orgErr.message}`,
+    };
   }
+  console.log(
+    `[widget-gates] check_org_hourly_ceiling orgId=${args.orgId} limit=300 result=${JSON.stringify(orgOk)} ok=${orgOk !== false}`,
+  );
   if (orgOk === false) {
     return { ok: false, reason: "org_hourly", status: 429, message: THROTTLE_MSG };
   }
 
+  // 5. check_rate_limit(ip)
   const salt = process.env.IP_HASH_SALT ?? "";
   const ipHash = args.ip ? await sha256Hex(args.ip + salt) : "unknown";
+  const ipSubject = `ip:${ipHash}`;
   const { data: ipOk, error: ipErr } = await svc.rpc("check_rate_limit", {
     p_org: args.orgId,
-    p_key: `ip:${ipHash}`,
+    p_subject: ipSubject,
     p_limit: 120,
   });
   if (ipErr) {
-    console.error("[widget-gates] check_rate_limit(ip) failed", ipErr);
-    return { ok: false, reason: "ip_rate", status: 429, message: THROTTLE_MSG };
+    console.error(
+      `[widget-gates] check_rate_limit(ip) RPC_ERROR subject=${ipSubject} limit=120 ` +
+        `err=${ipErr.message} code=${(ipErr as { code?: string }).code ?? ""} ` +
+        `hint=${(ipErr as { hint?: string }).hint ?? ""}`,
+    );
+    return {
+      ok: false,
+      reason: "rpc_error",
+      status: 500,
+      message: `Rate-limit check failed (ip): ${ipErr.message}`,
+    };
   }
+  console.log(
+    `[widget-gates] check_rate_limit(ip) subject=${ipSubject} limit=120 result=${JSON.stringify(ipOk)} ok=${ipOk !== false}`,
+  );
   if (ipOk === false) {
     return { ok: false, reason: "ip_rate", status: 429, message: THROTTLE_MSG };
   }
 
+  console.log(`[widget-gates] all gates passed orgId=${args.orgId}`);
   return { ok: true };
 }
 
