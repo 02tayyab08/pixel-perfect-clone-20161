@@ -209,6 +209,9 @@ export const Route = createFileRoute("/api/public/widget-query")({
             })
             .select("id")
             .single();
+          console.log(
+            `[widget-query] conversations.insert channel=text endUserRef=${parsed.endUserRef} err=${convErr?.message ?? "null"} id=${conv?.id ?? "null"}`,
+          );
           if (convErr) {
             return new Response(`conversations.insert failed: ${convErr.message}`, { status: 500 });
           }
@@ -331,9 +334,29 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 `[widget-query] stream done sawFunctionCall=${sawFunctionCall} capturedLead=${!!capturedCall}`,
               );
             } catch (e) {
-              const err = e as { name?: string; message?: string; status?: number };
+              const err = e as {
+                name?: string;
+                message?: string;
+                status?: number;
+                code?: string | number;
+                error?: unknown;
+                response?: unknown;
+                cause?: unknown;
+              };
               console.error(
-                `[widget-query] generateContentStream failed status=${err?.status} name=${err?.name} message=${err?.message}`,
+                `[widget-query] generateContentStream failed status=${err?.status} code=${err?.code ?? ""} name=${err?.name} message=${err?.message}`,
+              );
+              console.error(
+                `[widget-query] generateContentStream raw=${(() => {
+                  try {
+                    return JSON.stringify(e);
+                  } catch {
+                    return String(e);
+                  }
+                })()}`,
+              );
+              console.error(
+                `[widget-query] toolsAtFailure=${JSON.stringify(tools)} channelInserted=text`,
               );
               streamErrored = true;
               const status = err?.status;
