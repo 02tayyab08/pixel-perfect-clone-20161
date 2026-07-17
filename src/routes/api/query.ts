@@ -87,8 +87,11 @@ async function expandQueryTerms(question: string): Promise<string | null> {
       "nothing else.\n\nQuestion: " +
       question;
     const call = ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-3.1-flash-lite",
       contents: prompt,
+      config: {
+        thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false },
+      },
     });
     const timeout = new Promise<null>((resolve) =>
       setTimeout(() => resolve(null), TIMEOUT_MS),
