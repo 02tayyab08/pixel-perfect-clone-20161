@@ -90,7 +90,7 @@ async function expandQueryTerms(question: string): Promise<string | null> {
       model: "gemini-3.1-flash-lite",
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false },
+        thinkingConfig: { thinkingLevel: "MINIMAL", includeThoughts: false },
       },
     });
     const timeout = new Promise<null>((resolve) =>
