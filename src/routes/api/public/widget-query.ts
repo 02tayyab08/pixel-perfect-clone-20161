@@ -3,6 +3,7 @@ import { z } from "zod";
 import { bootstrapStore } from "@/lib/store-bootstrap.server";
 import { Type } from "@google/genai";
 import { gemini, QUERY_MODEL } from "@/lib/gemini.server";
+import { ThinkingLevel } from "@google/genai";
 import { salniService } from "@/lib/supabase.server";
 import { SetupInProgressError, isSetupInProgressPayload } from "@/lib/errors";
 import { CONSENT_SENTINEL, extractIp, runWidgetGates } from "@/lib/widget.server";
@@ -299,7 +300,10 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 config: {
                   systemInstruction,
                   tools,
-                  thinkingConfig: { includeThoughts: false },
+                  thinkingConfig: {
+                    thinkingLevel: ThinkingLevel.LOW,
+                    includeThoughts: false,
+                  },
                 },
               });
 
