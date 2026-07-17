@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/session.server";
 import { salniService, salniAsUser } from "@/lib/supabase.server";
@@ -90,7 +91,7 @@ async function expandQueryTerms(question: string): Promise<string | null> {
       model: "gemini-3.1-flash-lite",
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingLevel: "MINIMAL", includeThoughts: false },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL, includeThoughts: false },
       },
     });
     const timeout = new Promise<null>((resolve) =>
