@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/session.server";
 import { salniService, salniAsUser } from "@/lib/supabase.server";
@@ -87,8 +88,11 @@ async function expandQueryTerms(question: string): Promise<string | null> {
       "nothing else.\n\nQuestion: " +
       question;
     const call = ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-3.1-flash-lite",
       contents: prompt,
+      config: {
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL, includeThoughts: false },
+      },
     });
     const timeout = new Promise<null>((resolve) =>
       setTimeout(() => resolve(null), TIMEOUT_MS),
@@ -298,9 +302,11 @@ export const Route = createFileRoute("/api/query")({
                     FEE_QUOTED_PAIR_RULE,
                   tools: toolsPayload,
                   thinkingConfig: {
-                    // Keep reasoning internal. Do NOT set thinkingBudget: 0 —
-                    // fee-disambiguation quality benefits from reasoning; we
-                    // only want it kept off the wire.
+                    // Keep reasoning internal AND bounded. On Gemini 3.x
+                    // thinking is on-high by default and thinking tokens bill
+                    // as OUTPUT — includeThoughts:false only hides them,
+                    // thinkingLevel is the actual budget dial.
+                    thinkingLevel: ThinkingLevel.LOW,
                     includeThoughts: false,
                   },
                 },
