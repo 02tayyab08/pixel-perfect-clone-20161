@@ -17,7 +17,11 @@ export function gemini(): GoogleGenAI {
 }
 
 export const SHARED_STORE_DISPLAY_NAME = "salni-shared-v1";
-export const QUERY_MODEL = "gemini-2.5-flash";
+const _envModel = process.env.GEMINI_QUERY_MODEL?.trim();
+export const QUERY_MODEL = _envModel || "gemini-3.5-flash";
+console.log(
+  `[gemini-model] query=${QUERY_MODEL} source=${_envModel ? "env" : "default"}`,
+);
 
 export async function sleep(ms: number): Promise<void> {
   await new Promise((r) => setTimeout(r, ms));
