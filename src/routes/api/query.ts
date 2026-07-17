@@ -302,9 +302,11 @@ export const Route = createFileRoute("/api/query")({
                     FEE_QUOTED_PAIR_RULE,
                   tools: toolsPayload,
                   thinkingConfig: {
-                    // Keep reasoning internal. Do NOT set thinkingBudget: 0 —
-                    // fee-disambiguation quality benefits from reasoning; we
-                    // only want it kept off the wire.
+                    // Keep reasoning internal AND bounded. On Gemini 3.x
+                    // thinking is on-high by default and thinking tokens bill
+                    // as OUTPUT — includeThoughts:false only hides them,
+                    // thinkingLevel is the actual budget dial.
+                    thinkingLevel: ThinkingLevel.LOW,
                     includeThoughts: false,
                   },
                 },
