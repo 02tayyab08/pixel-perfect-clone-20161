@@ -8,7 +8,6 @@ import { gemini, QUERY_MODEL, EXPANSION_MODEL } from "@/lib/gemini.server";
 import { SetupInProgressError, isSetupInProgressPayload } from "@/lib/errors";
 import { extractStreamUsage, logAnswerCost, logQuestionCostTotal } from "@/lib/cost-log.server";
 import type { CallCostBreakdown } from "@/lib/cost-log.server";
-import { ThinkingLevel } from "@google/genai";
 
 const BodySchema = z.object({
   orgId: z.string().uuid(),
