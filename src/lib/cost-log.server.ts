@@ -1,7 +1,17 @@
 /**
  * Shared Gemini usage / cost logging.
- * Rates: input $1.50/M (prompt + File Search toolUse), output $9/M
- * (candidates + thoughts). Estimates only — Google bill is ground truth.
+ *
+ * Rates are model-aware (paid list, estimates only — Google bill is ground truth):
+ *   gemini-*-flash-lite → input $0.25/M, output $1.50/M
+ *   gemini-*-flash (non-lite) → input $1.50/M, output $9.00/M
+ *   unknown models → flash (non-lite) rates + warn once
+ *
+ * Input = prompt + File Search toolUse. Output = candidates + thoughts.
+ *
+ * Note on thoughtsTokenCount: gemini-3.1-flash-lite with thinkingLevel=MEDIUM
+ * often omits thoughtsTokenCount from usageMetadata entirely (field absent,
+ * not present-as-0). When omitted we cannot measure thinking-token cost on
+ * this model — do not treat thoughts=0 as "thinking is free."
  */
 
 export type StreamUsageSnapshot = {
@@ -29,10 +39,41 @@ export type CallCostBreakdown = {
   costUSD: number;
   groundingChunks: number;
   latencyMs: number;
+  /** Resolved $/M rates used for this call. */
+  inputUsdPerM: number;
+  outputUsdPerM: number;
 };
 
-const INPUT_USD_PER_M = 1.5;
-const OUTPUT_USD_PER_M = 9.0;
+type ModelRates = { inputUsdPerM: number; outputUsdPerM: number; tier: string };
+
+const FLASH_LITE: ModelRates = {
+  inputUsdPerM: 0.25,
+  outputUsdPerM: 1.5,
+  tier: "flash-lite",
+};
+const FLASH: ModelRates = {
+  inputUsdPerM: 1.5,
+  outputUsdPerM: 9.0,
+  tier: "flash",
+};
+
+const warnedUnknownModels = new Set<string>();
+
+/** Resolve list rates for a Gemini model id. */
+export function ratesForModel(model: string | null | undefined): ModelRates {
+  const id = (model ?? "").trim().toLowerCase();
+  if (!id) return FLASH;
+  // Lite before generic flash (ids look like gemini-3.1-flash-lite).
+  if (id.includes("flash-lite") || id.includes("flash_lite")) return FLASH_LITE;
+  if (id.includes("flash")) return FLASH;
+  if (!warnedUnknownModels.has(id)) {
+    warnedUnknownModels.add(id);
+    console.warn(
+      `[cost] unknown model rates for "${model}" — using flash ($1.50/$9) until table updated`,
+    );
+  }
+  return FLASH;
+}
 
 export function extractStreamUsage(meta: unknown): StreamUsageSnapshot | null {
   if (!meta || typeof meta !== "object") return null;
@@ -71,7 +112,10 @@ export function extractStreamUsage(meta: unknown): StreamUsageSnapshot | null {
   return snap;
 }
 
-export function computeCallCost(usage: StreamUsageSnapshot | null): {
+export function computeCallCost(
+  usage: StreamUsageSnapshot | null,
+  model?: string | null,
+): {
   prompt: number;
   toolUse: number;
   candidates: number;
@@ -80,7 +124,10 @@ export function computeCallCost(usage: StreamUsageSnapshot | null): {
   totalReported: number;
   totalSum: number;
   costUSD: number;
+  inputUsdPerM: number;
+  outputUsdPerM: number;
 } {
+  const rates = ratesForModel(model);
   const prompt = usage?.promptTokenCount ?? 0;
   const toolUse = usage?.toolUsePromptTokenCount ?? 0;
   const candidates = usage?.candidatesTokenCount ?? 0;
@@ -91,8 +138,8 @@ export function computeCallCost(usage: StreamUsageSnapshot | null): {
   const inputTokens = prompt + toolUse;
   const outputTokens = candidates + thoughts;
   const costUSD =
-    (inputTokens / 1_000_000) * INPUT_USD_PER_M +
-    (outputTokens / 1_000_000) * OUTPUT_USD_PER_M;
+    (inputTokens / 1_000_000) * rates.inputUsdPerM +
+    (outputTokens / 1_000_000) * rates.outputUsdPerM;
   return {
     prompt,
     toolUse,
@@ -102,6 +149,8 @@ export function computeCallCost(usage: StreamUsageSnapshot | null): {
     totalReported,
     totalSum,
     costUSD,
+    inputUsdPerM: rates.inputUsdPerM,
+    outputUsdPerM: rates.outputUsdPerM,
   };
 }
 
@@ -116,7 +165,7 @@ export function logAnswerCost(args: {
   latencyMs: number;
 }): CallCostBreakdown {
   const call = args.call ?? "answer";
-  const computed = computeCallCost(args.usage);
+  const computed = computeCallCost(args.usage, args.model);
   const groundingChunks = args.groundingChunks ?? 0;
   const present = args.usage?.presentFields?.length
     ? args.usage.presentFields.join(",")
@@ -127,11 +176,14 @@ export function logAnswerCost(args: {
       : computed.totalReported === computed.totalSum
         ? "ok"
         : `mismatch reported=${computed.totalReported} sum=${computed.totalSum}`;
+  const thoughtsFieldPresent = present.includes("thoughtsTokenCount");
 
   console.log(
     `[cost] call=${call} model=${args.model} thinkingLevel=${args.thinkingLevel} ` +
+      `rates=$${computed.inputUsdPerM}/$${computed.outputUsdPerM} ` +
       `prompt=${computed.prompt} toolUse=${computed.toolUse} candidates=${computed.candidates} ` +
-      `thoughts=${computed.thoughts} cached=${computed.cached} totalTokenCount=${computed.totalReported} ` +
+      `thoughts=${computed.thoughts} thoughtsField=${thoughtsFieldPresent ? "present" : "absent"} ` +
+      `cached=${computed.cached} totalTokenCount=${computed.totalReported} ` +
       `totalSum=${computed.totalSum} sumCheck=${sumCheck} grounding=${groundingChunks} ` +
       `costUSD=${computed.costUSD.toFixed(6)} latencyMs=${args.latencyMs} usageFields=${present}`,
   );

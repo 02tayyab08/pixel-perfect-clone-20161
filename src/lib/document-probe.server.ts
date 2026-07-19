@@ -80,7 +80,7 @@ async function generateQuestions(
   const usage = extractStreamUsage(
     (r as { usageMetadata?: unknown }).usageMetadata,
   );
-  const { costUSD } = computeCallCost(usage);
+  const { costUSD } = computeCallCost(usage, EXPANSION_MODEL);
 
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) return { questions: [], usageCost: costUSD };
@@ -143,7 +143,7 @@ async function answerProbeQuestion(args: {
   const usage = extractStreamUsage(
     (r as { usageMetadata?: unknown }).usageMetadata,
   );
-  const { costUSD } = computeCallCost(usage);
+  const { costUSD } = computeCallCost(usage, EXPANSION_MODEL);
 
   return {
     result: {
