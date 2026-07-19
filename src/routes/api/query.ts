@@ -3,8 +3,11 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/session.server";
 import { salniService, salniAsUser } from "@/lib/supabase.server";
 import { bootstrapStore } from "@/lib/store-bootstrap.server";
-import { gemini, QUERY_MODEL } from "@/lib/gemini.server";
+import { gemini, QUERY_MODEL, EXPANSION_MODEL } from "@/lib/gemini.server";
 import { SetupInProgressError, isSetupInProgressPayload } from "@/lib/errors";
+import { extractStreamUsage, logAnswerCost, logQuestionCostTotal } from "@/lib/cost-log.server";
+import type { CallCostBreakdown } from "@/lib/cost-log.server";
+import { ThinkingLevel } from "@google/genai";
 
 const BodySchema = z.object({
   orgId: z.string().uuid(),
@@ -74,9 +77,26 @@ documents), refuse per rule 5 above — do NOT synthesize the pair.`;
 
 void isSetupInProgressPayload; // exported for client consumers of /api/query
 
+type ExpansionOutcome = {
+  terms: string | null;
+  /** Always settles — even on term-race timeout the call still bills. */
+  settled: Promise<{
+    usage: ReturnType<typeof extractStreamUsage>;
+    latencyMs: number;
+  }>;
+};
+
 // Best-effort retrieval-term expansion. Never blocks or breaks an answer.
-async function expandQueryTerms(question: string): Promise<string | null> {
-  const TIMEOUT_MS = 800;
+async function expandQueryTerms(question: string): Promise<ExpansionOutcome> {
+  // Measured RTT under MINIMAL+tiny output (Q2 phrasing, n=5): 797–901ms.
+  // Baseline without thinkingLevel: 889–1496ms. Old 800ms budget lost every race.
+  // Budget = measured p95 (~901) + headroom for cold starts (~1.5s seen).
+  const TIMEOUT_MS = 2000;
+  const t0 = Date.now();
+  const emptySettled = Promise.resolve({
+    usage: null as ReturnType<typeof extractStreamUsage>,
+    latencyMs: 0,
+  });
   try {
     const ai = gemini();
     const prompt =
@@ -86,22 +106,68 @@ async function expandQueryTerms(question: string): Promise<string | null> {
       "quota, workforce nationalization). Output ONLY the comma-separated terms, " +
       "nothing else.\n\nQuestion: " +
       question;
-    const call = ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
-      contents: prompt,
-    });
-    const timeout = new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), TIMEOUT_MS),
+    // Expansion is a tiny keyword list — pin MINIMAL thinking + tiny output so
+    // flash-lite does not spend seconds on default reasoning.
+    const callPromise = ai.models
+      .generateContent({
+        model: EXPANSION_MODEL,
+        contents: prompt,
+        config: {
+          temperature: 0,
+          maxOutputTokens: 64,
+          thinkingConfig: {
+            includeThoughts: false,
+            thinkingLevel: ThinkingLevel.MINIMAL,
+          },
+        },
+      })
+      .then((r) => ({ r, ms: Date.now() - t0 }));
+
+    const settled = callPromise.then(
+      ({ r, ms }) => {
+        const textLen = (r as { text?: string }).text?.length ?? 0;
+        console.log(
+          `[query-expansion] complete model=${EXPANSION_MODEL} ms=${ms} textLen=${textLen}`,
+        );
+        return {
+          usage: extractStreamUsage(
+            (r as { usageMetadata?: unknown }).usageMetadata,
+          ),
+          latencyMs: ms,
+        };
+      },
+      (e) => {
+        console.log(
+          `[query-expansion] complete-error model=${EXPANSION_MODEL} ms=${Date.now() - t0}`,
+          e instanceof Error ? e.message : String(e),
+        );
+        return { usage: null, latencyMs: Date.now() - t0 };
+      },
     );
-    const res = await Promise.race([call, timeout]);
-    if (!res) {
-      console.log("[query-expansion] skipped: timeout");
-      return null;
+
+    const raced = await Promise.race([
+      callPromise.then((x) => ({ kind: "ok" as const, ...x })),
+      new Promise<{ kind: "timeout"; ms: number }>((resolve) =>
+        setTimeout(
+          () => resolve({ kind: "timeout", ms: Date.now() - t0 }),
+          TIMEOUT_MS,
+        ),
+      ),
+    ]);
+
+    if (raced.kind === "timeout") {
+      console.log(
+        `[query-expansion] skipped: timeout budget=${TIMEOUT_MS}ms raceMs=${raced.ms} model=${EXPANSION_MODEL} (awaiting late-complete)`,
+      );
+      return { terms: null, settled };
     }
-    const text = (res as { text?: string }).text?.trim() ?? "";
+
+    const text = (raced.r as { text?: string }).text?.trim() ?? "";
     if (!text) {
-      console.log("[query-expansion] skipped: empty");
-      return null;
+      console.log(
+        `[query-expansion] skipped: empty model=${EXPANSION_MODEL} ms=${raced.ms}`,
+      );
+      return { terms: null, settled };
     }
     // Sanitize to one line of comma-separated terms.
     const terms = text
@@ -111,15 +177,17 @@ async function expandQueryTerms(question: string): Promise<string | null> {
       .filter(Boolean)
       .slice(0, 8)
       .join(", ");
-    if (!terms) return null;
-    console.log("[query-expansion] terms=", terms);
-    return terms;
+    if (!terms) return { terms: null, settled };
+    console.log(
+      `[query-expansion] terms=${terms} model=${EXPANSION_MODEL} ms=${raced.ms}`,
+    );
+    return { terms, settled };
   } catch (e) {
     console.log(
-      "[query-expansion] skipped: error",
+      `[query-expansion] skipped: error model=${EXPANSION_MODEL} ms=${Date.now() - t0}`,
       e instanceof Error ? e.message : String(e),
     );
-    return null;
+    return { terms: null, settled: emptySettled };
   }
 }
 
@@ -267,7 +335,8 @@ export const Route = createFileRoute("/api/query")({
                   console.error(`[query-diag-ping] raw=${dump}`);
                 }
               }
-              const terms = await expandQueryTerms(parsed.message);
+              const expansion = await expandQueryTerms(parsed.message);
+              const terms = expansion.terms;
               const retrievalPrompt = terms
                 ? `${parsed.message}\n(Related terms to consider when searching the documents: ${terms})`
                 : parsed.message;
@@ -298,10 +367,10 @@ export const Route = createFileRoute("/api/query")({
                     FEE_QUOTED_PAIR_RULE,
                   tools: toolsPayload,
                   thinkingConfig: {
-                    // Keep reasoning internal. Do NOT set thinkingBudget: 0 —
-                    // fee-disambiguation quality benefits from reasoning; we
-                    // only want it kept off the wire.
+                    // Keep reasoning internal. Do NOT set thinkingBudget alongside
+                    // thinkingLevel (that 400s). Do NOT set thinkingBudget: 0.
                     includeThoughts: false,
+                    thinkingLevel: ThinkingLevel.MEDIUM,
                   },
                 },
               });
@@ -316,7 +385,10 @@ export const Route = createFileRoute("/api/query")({
               let sawThoughtPart = false;
               let thoughtCharsDropped = 0;
               let textParts = 0;
+              let lastUsageMeta: unknown = undefined;
+              const thinkingLevelInEffect = ThinkingLevel.MEDIUM;
               for await (const chunk of iter) {
+                if (chunk.usageMetadata) lastUsageMeta = chunk.usageMetadata;
                 const candCount = chunk.candidates?.length ?? 0;
                 if (candCount > 1) sawMultiCandidate = true;
                 // Per-part iteration (not chunk.text) so we can drop any part
@@ -365,6 +437,44 @@ export const Route = createFileRoute("/api/query")({
               console.log(
                 `[query-parts-summary] chunks=${chunkIdx} textParts=${textParts} multiCandidate=${sawMultiCandidate} thoughtPartSeen=${sawThoughtPart} thoughtCharsDropped=${thoughtCharsDropped} fullTextLen=${fullText.length}`,
               );
+              const answerCost = logAnswerCost({
+                call: "answer",
+                model: QUERY_MODEL,
+                thinkingLevel: thinkingLevelInEffect,
+                usage: extractStreamUsage(lastUsageMeta),
+                groundingChunks: groundingChunks.length,
+                latencyMs: Date.now() - startedAt,
+              });
+              const expSettled = await expansion.settled;
+              const expansionCost = logAnswerCost({
+                call: "expansion",
+                model: EXPANSION_MODEL,
+                thinkingLevel: ThinkingLevel.MINIMAL,
+                usage: expSettled.usage,
+                groundingChunks: 0,
+                latencyMs: expSettled.latencyMs,
+              });
+              const parts: CallCostBreakdown[] = [expansionCost, answerCost];
+              logQuestionCostTotal({
+                path: "staff",
+                parts,
+                latencyMs: Date.now() - startedAt,
+              });
+              try {
+                const titles = groundingChunks.map((raw) => {
+                  const c = raw as {
+                    retrievedContext?: { title?: string; text?: string };
+                  };
+                  const t = c.retrievedContext?.title ?? "(no title)";
+                  const snip = (c.retrievedContext?.text ?? "").slice(0, 120);
+                  return { title: t, snip };
+                });
+                console.log(
+                  `[query-grounding-diag] n=${groundingChunks.length} chunks=${JSON.stringify(titles)}`,
+                );
+              } catch {
+                /* ignore */
+              }
             } catch (e) {
               const err = e as {
                 name?: string;
@@ -379,7 +489,7 @@ export const Route = createFileRoute("/api/query")({
                 dump = String(e).slice(0, 4000);
               }
               console.error(
-                `gemini.generateContentStream failed name=${err?.name} status=${err?.status} code=${err?.code} message=${err?.message}`,
+                `gemini.generateContentStream failed model=${QUERY_MODEL} name=${err?.name} status=${err?.status} code=${err?.code} message=${err?.message}`,
               );
               console.error(`gemini.generateContentStream raw=${dump}`);
               streamErrored = true;

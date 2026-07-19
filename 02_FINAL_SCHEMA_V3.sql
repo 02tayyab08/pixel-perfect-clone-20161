@@ -733,6 +733,67 @@ end;
 $$;
 grant execute on function public.sweep_stuck_documents(interval, interval, integer) to service_role;
 
+-- ---------- DOCUMENT RETRIEVAL PROBES (Phase 1 ingestion quality) ----------
+-- Side quality state (Option A): documents.status stays queued|indexing|ready|failed.
+-- Probe class is WARN-ONLY for widget publish — never blocks answers.
+create type public.probe_class as enum (
+  'ok', 'warn', 'bad', 'skipped', 'inconclusive'
+);
+create type public.probe_confidence as enum ('high', 'low');
+
+create table public.document_probes (
+  id                  uuid primary key default gen_random_uuid(),
+  document_id         uuid not null references public.documents(id) on delete cascade,
+  organization_id     uuid not null references public.organizations(id) on delete cascade,
+  probe_class         public.probe_class not null,
+  probe_confidence    public.probe_confidence not null default 'high',
+  success_rate        numeric(4,3),
+  questions_total     integer not null default 0
+    check (questions_total >= 0),
+  questions_grounded  integer not null default 0
+    check (questions_grounded >= 0),
+  questions           jsonb not null default '[]'::jsonb,
+  results             jsonb not null default '[]'::jsonb,
+  extract_chars       integer,
+  model               text,
+  cost_usd            numeric(12,6),
+  created_at          timestamptz not null default now()
+);
+
+create index idx_document_probes_doc_created
+  on public.document_probes(document_id, created_at desc);
+create index idx_document_probes_org_class
+  on public.document_probes(organization_id, probe_class);
+
+-- Claim ready docs that have never been probed (SKIP LOCKED).
+-- Skipped/inconclusive/ok/warn/bad all insert a row so they are not reclaimed.
+create or replace function public.claim_documents_for_probe(p_batch integer default 5)
+returns setof public.documents
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  update public.documents d
+     set updated_at = now()
+   where d.id in (
+     select d2.id
+       from public.documents d2
+      where d2.status = 'ready'
+        and d2.file_search_document_name is not null
+        and not exists (
+          select 1 from public.document_probes p where p.document_id = d2.id
+        )
+      order by d2.indexed_at nulls first, d2.created_at
+      for update of d2 skip locked
+      limit greatest(coalesce(p_batch, 5), 1)
+   )
+  returning d.*;
+end;
+$$;
+grant execute on function public.claim_documents_for_probe(integer) to service_role;
+
 -- ---------- ENABLE RLS (every table, no exceptions) ----------
 alter table public.plans                   enable row level security;
 alter table public.app_config              enable row level security;
@@ -750,6 +811,7 @@ alter table public.usage_counters          enable row level security;
 alter table public.rate_limits             enable row level security;
 alter table public.org_hourly_usage        enable row level security;
 alter table public.audit_log               enable row level security;
+alter table public.document_probes         enable row level security;
 
 -- ---------- RLS POLICIES ----------
 -- plans: readable reference data for signed-in users
@@ -780,6 +842,10 @@ create policy members_manage on public.organization_members for all
 create policy documents_member_select on public.documents for select using (public.is_org_member(organization_id));
 create policy documents_member_insert on public.documents for insert with check (public.is_org_member(organization_id));
 create policy documents_member_update on public.documents for update using (public.is_org_member(organization_id));
+
+-- document_probes: members read only. Inserts are service_role (probe worker).
+create policy document_probes_member_select on public.document_probes
+  for select using (public.is_org_member(organization_id));
 
 -- chat data: members read; ALL chat writes happen in Edge Functions via
 -- service_role (dashboard and widget alike) for one consistent path.
@@ -832,6 +898,9 @@ grant select, insert, update on
   public.plans
 to authenticated;
 
+-- Probe rows are written by the worker; members may read for UI badges.
+grant select on public.document_probes to authenticated;
+
 -- Backend/worker role: full table access on every table. service_role
 -- bypasses RLS but NOT grants. Deletion ordering (Gemini → Storage →
 -- rows) is enforced in the delete server function, not here.
@@ -842,6 +911,7 @@ grant select, insert, update, delete on
   public.profiles,
   public.organization_members,
   public.documents,
+  public.document_probes,
   public.conversations,
   public.messages,
   public.citations,
@@ -874,11 +944,10 @@ grant all on storage.objects, storage.buckets to service_role;
 -- select cron.schedule('sweep-stuck-documents', '*/5 * * * *',
 --   $$select public.sweep_stuck_documents();$$);
 --
--- Job 2: drive the queued-document processor (webhook = fast path,
--- this ping = guarantee). Store CRON_WEBHOOK_SECRET in Supabase Vault.
--- select cron.schedule('process-queued-documents', '*/5 * * * *',
+-- Job 3: retrieval self-probe (Phase 1) for ready docs missing a probe row.
+-- select cron.schedule('probe-ready-documents', '*/10 * * * *',
 --   $$select net.http_post(
---       url     := 'https://<project-ref>.supabase.co/functions/v1/process-documents',
+--       url     := 'https://<host>/api/public/probe-documents',
 --       headers := jsonb_build_object('x-cron-secret',
 --                    (select decrypted_secret from vault.decrypted_secrets
 --                      where name = 'cron_webhook_secret'))

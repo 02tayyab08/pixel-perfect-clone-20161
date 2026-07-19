@@ -34,6 +34,10 @@ type DocRow = {
   error_message: string | null;
   retry_count: number | null;
   created_at: string;
+  probe_class?: string | null;
+  probe_confidence?: string | null;
+  probe_success_rate?: number | null;
+  probe_grounded?: string | null;
 };
 
 const ACCEPT = ".pdf,.docx,.txt,.md,.csv,.xlsx,.pptx";
@@ -308,6 +312,7 @@ function DocumentsPage() {
             <tr>
               <th className="px-4 py-3">File</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Retrieval check</th>
               <th className="px-4 py-3">Size</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -315,7 +320,7 @@ function DocumentsPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
                   No documents yet — upload one to get started.
                 </td>
               </tr>
@@ -325,6 +330,9 @@ function DocumentsPage() {
                 <td className="px-4 py-3 font-medium">{r.file_name}</td>
                 <td className="px-4 py-3">
                   <StatusPill status={r.status} error={r.error_message} />
+                </td>
+                <td className="px-4 py-3">
+                  <ProbePill row={r} />
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{formatBytes(r.size_bytes)}</td>
                 <td className="px-4 py-3 text-right">
@@ -432,6 +440,67 @@ function StatusPill({ status, error }: { status: string; error: string | null })
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
       <Loader2 className="h-3 w-3 animate-spin" /> {status === "indexing" ? "Indexing" : "Queued"}
+    </span>
+  );
+}
+
+/** Phase 1 retrieval self-probe badge — warn-only, never blocks publish. */
+function ProbePill({ row }: { row: DocRow }) {
+  if (row.status !== "ready") {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const cls = row.probe_class;
+  if (!cls) {
+    return (
+      <span
+        title="Retrieval self-probe pending"
+        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+      >
+        <Loader2 className="h-3 w-3 animate-spin" /> Checking
+      </span>
+    );
+  }
+  const rate =
+    row.probe_success_rate != null
+      ? `${Math.round(row.probe_success_rate * 100)}%`
+      : row.probe_grounded ?? "";
+  if (cls === "ok" || cls === "skipped") {
+    return (
+      <span
+        title={cls === "skipped" ? "Text formats are not probed" : `Probe passed (${rate})`}
+        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
+      >
+        <CheckCircle2 className="h-3 w-3" /> {cls === "skipped" ? "Skipped" : "OK"}
+      </span>
+    );
+  }
+  if (cls === "warn") {
+    return (
+      <span
+        title={`This document may not answer questions reliably (probe ${rate}). Consider a text or markdown version.`}
+        className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-200"
+      >
+        <AlertCircle className="h-3 w-3" /> May be unreliable
+      </span>
+    );
+  }
+  if (cls === "bad") {
+    return (
+      <span
+        title={`Retrieval self-probe failed (${rate}). Prefer uploading a clean text/markdown version. Does not block the widget.`}
+        className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive"
+      >
+        <AlertCircle className="h-3 w-3" /> Unreliable answers
+      </span>
+    );
+  }
+  // inconclusive
+  return (
+    <span
+      title="Could not text-extract this file for a retrieval check (possible scan). Answers may be unreliable."
+      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+    >
+      <AlertCircle className="h-3 w-3" /> Check inconclusive
     </span>
   );
 }

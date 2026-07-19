@@ -1,0 +1,159 @@
+{
+  "when": "2026-07-18T06:15:48.398Z",
+  "ranking": "OK bad≤mixed≤good",
+  "results": [
+    {
+      "id": "ifza-pdf-bad",
+      "label": "original IFZA PDF (known bad)",
+      "expectRank": "bad",
+      "grounded": 8,
+      "total": 8,
+      "rate": 1,
+      "cls": "ok",
+      "details": [
+        {
+          "q": "How many business activities are included free of charge in an IFZA business license?",
+          "ok": true,
+          "chunks": 2
+        },
+        {
+          "q": "What is the cost for each additional business activity beyond the free allowance?",
+          "ok": true,
+          "chunks": 2
+        },
+        {
+          "q": "What is the maximum number of business activities allowed per license?",
+          "ok": true,
+          "chunks": 2
+        },
+        {
+          "q": "What is the standard fee for an initial Establishment Card application?",
+          "ok": true,
+          "chunks": 2
+        },
+        {
+          "q": "What is the standard fee for an Establishment Card renewal?",
+          "ok": true,
+          "chunks": 3
+        },
+        {
+          "q": "How many working days does it typically take for IFZA license issuance?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "What is the extra discount percentage for a 5-year IFZA license?",
+          "ok": true,
+          "chunks": 2
+        },
+        {
+          "q": "What is the fee for a visa status change if the applicant is already inside the UAE?",
+          "ok": true,
+          "chunks": 2
+        }
+      ]
+    },
+    {
+      "id": "meydan-docx-mixed",
+      "label": "Meydan license docx (mixed)",
+      "expectRank": "mixed",
+      "grounded": 8,
+      "total": 8,
+      "rate": 1,
+      "cls": "ok",
+      "details": [
+        {
+          "q": "What is the standard license fee for the Meydan Free Zone?",
+          "ok": true,
+          "chunks": 2
+        },
+        {
+          "q": "What is the cost of an establishment card in Meydan Free Zone?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "How much does the quota allocation cost for a single visa?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "What is the fee for a change of status if the employee is already inside the country?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "What is the reduced quota allocation fee for companies hiring more than 50 employees?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "How many activities can a customer include in a single Meydan Free Zone license?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "What is the combined cost of medical and Emirates ID for a visa applicant?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "What is the cost of an investor visa in Meydan Free Zone?",
+          "ok": true,
+          "chunks": 1
+        }
+      ]
+    },
+    {
+      "id": "ifza-md-good",
+      "label": "IFZA_Complete_Schedule_of_Fees_2024.md (known good)",
+      "expectRank": "good",
+      "grounded": 8,
+      "total": 8,
+      "rate": 1,
+      "cls": "ok",
+      "details": [
+        {
+          "q": "What is the maximum number of business activities allowed under an IFZA license?",
+          "ok": true,
+          "chunks": 2
+        },
+        {
+          "q": "How many business activities are included for free in an IFZA Business License package?",
+          "ok": true,
+          "chunks": 2
+        },
+        {
+          "q": "What is the mandatory requirement for license packages with 4 or more visas?",
+          "ok": true,
+          "chunks": 2
+        },
+        {
+          "q": "What is the discount percentage for a 5-year IFZA license?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "What is the fee for an initial Establishment Card application?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "How many working days does it typically take to issue an IFZA business license?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "What is the fee for a standard Salary Certificate issued in 3 working days?",
+          "ok": true,
+          "chunks": 1
+        },
+        {
+          "q": "What is the penalty fee for late business license renewal per month after the grace period?",
+          "ok": true,
+          "chunks": 1
+        }
+      ]
+    }
+  ]
+}

@@ -17,7 +17,12 @@ export function gemini(): GoogleGenAI {
 }
 
 export const SHARED_STORE_DISPLAY_NAME = "salni-shared-v1";
-export const QUERY_MODEL = "gemini-2.5-flash";
+/** Answer model for staff /api/query and widget /api/public/widget-query.
+ * LOCKED 2026-07-18: gemini-3.1-flash-lite + thinkingLevel MEDIUM.
+ * See eval/DECISION_LOG.md — do not change to chase retrieval soft-fails. */
+export const QUERY_MODEL = "gemini-3.1-flash-lite";
+/** Query-expansion (expandQueryTerms) — flash-lite, separate from answer model. */
+export const EXPANSION_MODEL = "gemini-3.1-flash-lite";
 
 export async function sleep(ms: number): Promise<void> {
   await new Promise((r) => setTimeout(r, ms));

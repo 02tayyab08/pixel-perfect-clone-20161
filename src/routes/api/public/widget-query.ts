@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { bootstrapStore } from "@/lib/store-bootstrap.server";
-import { Type } from "@google/genai";
+import { Type, ThinkingLevel } from "@google/genai";
 import { gemini, QUERY_MODEL } from "@/lib/gemini.server";
 import { salniService } from "@/lib/supabase.server";
 import { SetupInProgressError, isSetupInProgressPayload } from "@/lib/errors";
 import { CONSENT_SENTINEL, extractIp, runWidgetGates } from "@/lib/widget.server";
+import { extractStreamUsage, logAnswerCost, logQuestionCostTotal } from "@/lib/cost-log.server";
 
 void isSetupInProgressPayload;
 
@@ -291,6 +292,8 @@ export const Route = createFileRoute("/api/public/widget-query")({
             systemInstruction += localeNote;
 
             let sawFunctionCall = false;
+            const thinkingLevelInEffect = ThinkingLevel.MEDIUM;
+            let lastUsageMeta: unknown = undefined;
             try {
               const ai = gemini();
               const iter = await ai.models.generateContentStream({
@@ -299,11 +302,20 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 config: {
                   systemInstruction,
                   tools,
-                  thinkingConfig: { includeThoughts: false },
+                  // Required by Gemini 3.x when combining File Search (built-in)
+                  // with client functionDeclarations (capture_lead). Widget-only —
+                  // staff /api/query never declares capture_lead and must not set this.
+                  toolConfig: { includeServerSideToolInvocations: true },
+                  // Do NOT set thinkingBudget alongside thinkingLevel (that 400s).
+                  thinkingConfig: {
+                    includeThoughts: false,
+                    thinkingLevel: ThinkingLevel.MEDIUM,
+                  },
                 },
               });
 
               for await (const chunk of iter) {
+                if (chunk.usageMetadata) lastUsageMeta = chunk.usageMetadata;
                 const parts = (chunk.candidates?.[0]?.content?.parts ?? []) as Part[];
                 for (const part of parts) {
                   if (part.thought) continue;
@@ -333,6 +345,19 @@ export const Route = createFileRoute("/api/public/widget-query")({
               console.log(
                 `[widget-query] stream done sawFunctionCall=${sawFunctionCall} capturedLead=${!!capturedCall}`,
               );
+              const answerCost = logAnswerCost({
+                call: "answer",
+                model: QUERY_MODEL,
+                thinkingLevel: thinkingLevelInEffect,
+                usage: extractStreamUsage(lastUsageMeta),
+                groundingChunks: groundingChunks.length,
+                latencyMs: Date.now() - startedAt,
+              });
+              logQuestionCostTotal({
+                path: "widget",
+                parts: [answerCost],
+                latencyMs: Date.now() - startedAt,
+              });
             } catch (e) {
               const err = e as {
                 name?: string;
@@ -344,7 +369,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 cause?: unknown;
               };
               console.error(
-                `[widget-query] generateContentStream failed status=${err?.status} code=${err?.code ?? ""} name=${err?.name} message=${err?.message}`,
+                `[widget-query] generateContentStream failed model=${QUERY_MODEL} status=${err?.status} code=${err?.code ?? ""} name=${err?.name} message=${err?.message}`,
               );
               console.error(
                 `[widget-query] generateContentStream raw=${(() => {
