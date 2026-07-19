@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/session.server";
 import { salniService, salniAsUser } from "@/lib/supabase.server";
