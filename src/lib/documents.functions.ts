@@ -245,7 +245,47 @@ export const listDocumentsFn = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) return { ok: false as const, error: error.message, rows: [] as [] };
-    return { ok: true as const, rows: rows ?? [] };
+
+    const ids = (rows ?? []).map((r) => r.id as string);
+    type ProbeLite = {
+      document_id: string;
+      probe_class: string;
+      probe_confidence: string;
+      success_rate: number | null;
+      questions_grounded: number;
+      questions_total: number;
+      created_at: string;
+    };
+    const latestByDoc = new Map<string, ProbeLite>();
+    if (ids.length > 0) {
+      const { data: probes, error: pErr } = await asUser
+        .from("document_probes")
+        .select(
+          "document_id, probe_class, probe_confidence, success_rate, questions_grounded, questions_total, created_at",
+        )
+        .in("document_id", ids)
+        .order("created_at", { ascending: false });
+      if (pErr) {
+        console.error("listDocumentsFn: document_probes select failed", pErr.message);
+      } else {
+        for (const p of (probes ?? []) as ProbeLite[]) {
+          if (!latestByDoc.has(p.document_id)) latestByDoc.set(p.document_id, p);
+        }
+      }
+    }
+
+    const enriched = (rows ?? []).map((r) => {
+      const p = latestByDoc.get(r.id as string);
+      return {
+        ...r,
+        probe_class: p?.probe_class ?? null,
+        probe_confidence: p?.probe_confidence ?? null,
+        probe_success_rate: p?.success_rate ?? null,
+        probe_grounded: p ? `${p.questions_grounded}/${p.questions_total}` : null,
+      };
+    });
+
+    return { ok: true as const, rows: enriched };
   });
 
 export const retryDocumentFn = createServerFn({ method: "POST" })
@@ -275,16 +315,82 @@ export const retryDocumentFn = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+type FileSearchListDoc = {
+  name?: string;
+  displayName?: string;
+  customMetadata?: Array<{ key?: string; stringValue?: string }>;
+};
+
+/** Page through every File Search document under a store. */
+async function listFileSearchStoreDocuments(storeName: string): Promise<FileSearchListDoc[]> {
+  const ai = gemini();
+  const listed: FileSearchListDoc[] = [];
+  let pageToken: string | undefined = undefined;
+  let pages = 0;
+  do {
+    const page = (await ai.fileSearchStores.documents.list({
+      parent: storeName,
+      config: { pageSize: 20, pageToken },
+    } as never)) as {
+      documents?: FileSearchListDoc[];
+      nextPageToken?: string;
+      page?: FileSearchListDoc[];
+    };
+    const batch = page.page ?? page.documents ?? [];
+    for (const d of batch) listed.push(d);
+    pageToken = page.nextPageToken;
+    pages++;
+    // Safety cap: 50 pages (~5k docs) per invocation.
+    if (pages >= 50) break;
+  } while (pageToken);
+  return listed;
+}
+
+/**
+ * Resolve a Gemini File Search resource name by matching customMetadata.document_id.
+ * Returns null when the store listed successfully but no matching document exists.
+ */
+async function resolveFileSearchNameByDocumentId(
+  storeName: string,
+  documentId: string,
+): Promise<string | null> {
+  const listed = await listFileSearchStoreDocuments(storeName);
+  for (const d of listed) {
+    if (!d.name) continue;
+    const docId = (d.customMetadata ?? []).find((m) => m.key === "document_id")?.stringValue;
+    if (docId === documentId) return d.name;
+  }
+  return null;
+}
+
+function isGeminiNotFound(err: {
+  message?: string;
+  status?: number;
+  code?: number | string;
+}): boolean {
+  const status = err?.status;
+  const code = err?.code;
+  const msg = err?.message ?? "";
+  return (
+    status === 404 ||
+    code === 404 ||
+    code === "NOT_FOUND" ||
+    /not\s*found/i.test(msg)
+  );
+}
+
 /**
  * Phase-3 single-document delete. Strict ordering per spec:
- *   1. Delete the Gemini File Search document (if the row has a resource name).
+ *   1. Delete the Gemini File Search document (resolve resource name first if null).
  *   2. Only on success → delete the Storage object.
  *   3. Only on success → delete the documents row.
  *   4. Best-effort audit_log insert (never blocks success).
  *
- * Any failure in step 1 or 2 STOPS the chain and returns the raw error to
- * the caller — the row is left untouched so the user can retry after
- * inspecting the error.
+ * Never deletes the DB row while a Gemini document may still be alive.
+ * If `file_search_document_name` is null, list the store and match
+ * `customMetadata.document_id` before Gemini delete. Bootstrap/list failure
+ * aborts with an error and leaves the row untouched. Only a successful list
+ * with no match may skip Gemini delete (nothing indexed under this id).
  *
  * This function uses the service-role client because:
  *   - Clients have no DELETE policy on `documents` (deliberate).
@@ -331,15 +437,87 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
     };
 
     // ── Step 1: Gemini File Search document delete ────────────────────────
-    // If the row never got a resource name (e.g. upload failed before the
-    // operation returned one), there is nothing to delete in Gemini — skip
-    // step 1 with a warning and proceed. This is the ONLY sanctioned skip.
     let geminiSkipped = false;
-    if (row.file_search_document_name && row.file_search_document_name.length > 0) {
+    let geminiResolved = false;
+    let fileSearchName = row.file_search_document_name?.trim() || null;
+
+    if (!fileSearchName) {
+      // Never skip Gemini on a null name without resolving — that orphans
+      // store docs (recoupr-3 IFZA PDF). List + match document_id first.
+      const orgRead = await svc
+        .from("organizations")
+        .select("id, file_search_store_name")
+        .eq("id", data.orgId)
+        .maybeSingle();
+      if (orgRead.error) {
+        return {
+          ok: false as const,
+          stage: "gemini" as const,
+          error: `Cannot resolve File Search name: organizations.select failed: ${orgRead.error.message}`,
+        };
+      }
+      if (!orgRead.data) {
+        return {
+          ok: false as const,
+          stage: "gemini" as const,
+          error: "Cannot resolve File Search name: organization not found",
+        };
+      }
+
+      let storeName: string;
+      try {
+        storeName = await bootstrapStore(orgRead.data.file_search_store_name ?? null);
+      } catch (e) {
+        if (e instanceof SetupInProgressError) {
+          return {
+            ok: false as const,
+            stage: "gemini" as const,
+            error: "Cannot resolve File Search name: store setup in progress",
+          };
+        }
+        return {
+          ok: false as const,
+          stage: "gemini" as const,
+          error: `Cannot resolve File Search name: ${(e as Error).message}`,
+        };
+      }
+
+      try {
+        fileSearchName = await resolveFileSearchNameByDocumentId(storeName, row.id);
+      } catch (e) {
+        console.error("deleteDocument: resolve File Search name failed", {
+          documentId: row.id,
+          storeName,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        return {
+          ok: false as const,
+          stage: "gemini" as const,
+          error: `Cannot resolve File Search name: ${e instanceof Error ? e.message : String(e)}`,
+        };
+      }
+
+      if (fileSearchName) {
+        geminiResolved = true;
+        console.log("deleteDocument: resolved file_search_document_name from store", {
+          documentId: row.id,
+          fileSearchName,
+        });
+      } else {
+        // Successful list, no match — nothing alive under this document_id.
+        geminiSkipped = true;
+        console.warn(
+          "deleteDocument: file_search_document_name null and no store match; skipping Gemini delete",
+          { documentId: row.id, storeName },
+        );
+      }
+    }
+
+    if (fileSearchName) {
       try {
         const ai = gemini();
         await ai.fileSearchStores.documents.delete({
-          name: row.file_search_document_name,
+          name: fileSearchName,
           config: { force: true },
         });
       } catch (e) {
@@ -351,20 +529,13 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
         };
         // Treat NOT_FOUND as already-deleted upstream; anything else stops
         // the chain and surfaces the raw error to the UI.
-        const status = err?.status;
-        const code = err?.code;
         const msg = err?.message ?? String(e);
-        const looksMissing =
-          status === 404 ||
-          code === 404 ||
-          code === "NOT_FOUND" ||
-          /not\s*found/i.test(msg);
-        if (!looksMissing) {
+        if (!isGeminiNotFound(err)) {
           console.error("deleteDocument: gemini delete failed", {
             documentId: row.id,
-            fileSearchName: row.file_search_document_name,
-            status,
-            code,
+            fileSearchName,
+            status: err?.status,
+            code: err?.code,
             message: msg,
           });
           return {
@@ -375,14 +546,9 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
         }
         console.warn("deleteDocument: gemini reports NOT_FOUND, continuing", {
           documentId: row.id,
-          fileSearchName: row.file_search_document_name,
+          fileSearchName,
         });
       }
-    } else {
-      geminiSkipped = true;
-      console.warn("deleteDocument: file_search_document_name is null, skipping Gemini step", {
-        documentId: row.id,
-      });
     }
 
     // ── Step 2: Storage object delete ─────────────────────────────────────
@@ -429,8 +595,9 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
         metadata: {
           file_name: row.file_name,
           storage_path: row.storage_path,
-          file_search_document_name: row.file_search_document_name,
+          file_search_document_name: fileSearchName ?? row.file_search_document_name,
           gemini_skipped: geminiSkipped,
+          gemini_resolved: geminiResolved,
         },
       });
       if (audit.error) {
@@ -440,7 +607,7 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
       console.warn("deleteDocument: audit_log insert threw (non-fatal)", e);
     }
 
-    return { ok: true as const, geminiSkipped };
+    return { ok: true as const, geminiSkipped, geminiResolved };
   });
 
 /**
@@ -449,8 +616,9 @@ export const deleteDocumentFn = createServerFn({ method: "POST" })
  * Some documents were indexed into Gemini File Search but the resource name
  * never made it back into our row (e.g. the process-documents call crashed
  * after upload but before `update_document_status`, or an older reset
- * cleared the column). Without a resource name, `deleteDocumentFn` cannot
- * target the Gemini side and would orphan the File Search document.
+ * cleared the column). Without a resource name, delete must resolve via
+ * store list at delete-time; backfill makes that cheaper and keeps deletes
+ * targeting Gemini on the first try.
  *
  * Strategy: list every File Search document under the org's store, read its
  * `customMetadata.document_id` (set at upload time), and — for each row that
@@ -515,33 +683,9 @@ export const backfillFileSearchNamesFn = createServerFn({ method: "POST" })
     }
     const wantedIds = new Set(candidates.map((r) => r.id));
 
-    // Page through every File Search document under this store.
-    const ai = gemini();
-    type FsDoc = {
-      name?: string;
-      displayName?: string;
-      customMetadata?: Array<{ key?: string; stringValue?: string }>;
-    };
-    const listed: FsDoc[] = [];
-    let pageToken: string | undefined = undefined;
-    let pages = 0;
+    let listed: FileSearchListDoc[] = [];
     try {
-      do {
-        const page = (await ai.fileSearchStores.documents.list({
-          parent: storeName,
-          config: { pageSize: 20, pageToken },
-        } as never)) as {
-          documents?: FsDoc[];
-          nextPageToken?: string;
-          page?: FsDoc[];
-        };
-        const batch = page.documents ?? page.page ?? [];
-        for (const d of batch) listed.push(d);
-        pageToken = page.nextPageToken;
-        pages++;
-        // Safety cap: 50 pages (~5k docs) per invocation.
-        if (pages >= 50) break;
-      } while (pageToken);
+      listed = await listFileSearchStoreDocuments(storeName);
     } catch (e) {
       return {
         ok: false as const,

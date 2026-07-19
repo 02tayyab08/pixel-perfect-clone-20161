@@ -1,0 +1,75 @@
+{
+  "title": "Eval regression fixtures (observation only)",
+  "updated": "2026-07-19",
+  "locked_config": {
+    "QUERY_MODEL": "gemini-3.1-flash-lite",
+    "thinkingLevel": "MEDIUM",
+    "path": "staff /api/query unless noted"
+  },
+  "policy": "Do NOT attempt to fix these in the query path. These are regression fixtures for eval re-runs — not open product limitations and not drivers for clean-file conversion (Phase 2 SHELVED 2026-07-19).",
+  "infra_note": "Prior 'dense PDF unretrievable' / high miss rates were largely null file_search_document_name (response.documentName vs name; list pager .page vs .documents). On correctly indexed original IFZA PDF (2026-07-19): fresh-20 = 18/20; O1 PASS; Q11 PASS.",
+  "cases": [
+    {
+      "id": "fresh-Q3",
+      "set": "fresh-20-2026-07-18",
+      "question": "What's the fee for a Company Employee List?",
+      "expect": "400",
+      "observed_on_md_2026_07_18": "Hard refusal (retrieval miss)",
+      "observed_on_pdf_2026_07_19": "PASS (g=1)",
+      "status": "resolved-on-correct-index",
+      "class": "was-retrieval-miss"
+    },
+    {
+      "id": "fresh-Q11",
+      "set": "fresh-20-2026-07-18",
+      "question": "Cost to add 2 extra business activities beyond the free three?",
+      "expect": "2 × 1,000 = 2,000 (setup Extra Business Activity only; no amendment)",
+      "observed_on_md_2026_07_18": "Correct 1,000×2 setup math AND also Change/Adding/Removing of Activity = 2,000 amendment line (scored FAIL soft-fail)",
+      "observed_on_pdf_2026_07_19": "PASS — both setup and amendment surfaced; numbers pass",
+      "status": "regression-fixture-only",
+      "class": "action-verb-setup-vs-amendment",
+      "note": "Not an open known limitation. Keep in eval set; do not cite as product soft-fail."
+    },
+    {
+      "id": "fresh-Q14",
+      "set": "fresh-20-2026-07-18",
+      "question": "Does Meydan require WPS?",
+      "expect": "no",
+      "observed_on_md_2026_07_18": "Hard refusal (retrieval miss)",
+      "observed_on_pdf_2026_07_19": "Hard refusal (g=0) — Meydan-doc issue, both corpora",
+      "status": "open-eval-miss",
+      "class": "retrieval-miss-meydan"
+    },
+    {
+      "id": "fresh-Q16",
+      "set": "fresh-20-2026-07-18",
+      "question": "Compare establishment card costs between IFZA and Meydan.",
+      "expect": "IFZA 2,000 init / 2,200 renewal; Meydan 2,020",
+      "observed_on_md_2026_07_18": "Meydan 2,020 OK; IFZA initial/renewal lines missed",
+      "observed_on_pdf_2026_07_19": "PASS (g=3)",
+      "status": "resolved-on-correct-index",
+      "class": "was-retrieval-incomplete-cross-doc"
+    },
+    {
+      "id": "O1",
+      "set": "open-ended-prior",
+      "question": "I want to add an individual shareholder to my IFZA company. What fee do I pay?",
+      "expect": "Both Additional Individual Shareholder ≈ 350 (setup) AND Change/Adding/Removing of Shareholder ≈ 2,000 (amendment), distinctly labeled",
+      "observed_historically": "Often amendment 2,000 only; setup 350 intermittently retrieved",
+      "observed_on_pdf_2026_07_19": "PASS — both 350 and 2,000 (g=2)",
+      "status": "regression-fixture-only",
+      "class": "action-verb-setup-vs-amendment",
+      "note": "Not an open known limitation. Keep in eval set; do not re-architect query path."
+    },
+    {
+      "id": "fresh-Q10",
+      "set": "fresh-20-pdf-2026-07-19",
+      "question": "New IFZA company, 3-year Zero Visa license, plus establishment card — total upfront?",
+      "expect": "discounted 31,000 + est card 2,000 (md label: Zero Visa | 3-Year (20% off))",
+      "observed_on_pdf_2026_07_19": "FAIL — quoted standard 38,700 + 2,000; noted discounts may apply",
+      "status": "open-eval-miss",
+      "class": "dual-column-standard-vs-discount",
+      "note": "PDF text contains BOTH 38,700 and 31,000 on the same Zero Visa row. Not missing content — column/header disambiguation. Clean md uses explicit '3-Year (20% off)' label. See eval/FRESH20_PDF_VS_MD.md Q10 section."
+    }
+  ]
+}

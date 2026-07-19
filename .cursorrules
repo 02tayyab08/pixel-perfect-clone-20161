@@ -13,7 +13,8 @@
 - organizations has brand_color and logo_url. There is NO primary_color, NO logo, and NO composite `branding` column (a phantom `branding` select caused a fake 404 on /embed/:slug).
 - upsert_lead signature is exactly: (p_org, p_conversation, p_full_name, p_email, p_phone, p_company, p_notes, p_consent_text, p_ip) returns uuid. There is NO p_consent_given / p_consent_at / p_end_user_ref — the function sets consent internally. Raises LEAD_NO_CONTACT if email and phone are both empty. On unique_violation (23505), retry once.
 - There is NO conversations.lead_capture_asked and NO messages.meta. "Already asked" is derived: an existing lead linked to the conversation, or a stored assistant message containing the consent-template sentinel.
-- Gemini File Search: document deletion requires force:true (else 400 FAILED_PRECONDITION). documents.list page_size max is 20. chunkingConfig applies at ingestion only. operations.get can complete without response.name → file_search_document_name may be null and needs the backfill (match customMetadata.document_id).
+- Gemini File Search: document deletion requires force:true (else 400 FAILED_PRECONDITION). documents.list page_size max is 20. chunkingConfig applies at ingestion only.
+- **`documents.file_search_document_name` must be read from operations `response.documentName` (NOT `response.name`); the store list pager returns `.page` (NOT `.documents`).** Both bugs silently produced null names and broken backfill, which manifested as phantom retrieval failures (falsely attributed to “dense PDF unretrievable”). Always persist `documentName ?? name`, and page lists via `page.page ?? page.documents`.
 - gemini-2.5-flash streams thought parts: keep thinkingConfig.includeThoughts=false AND the per-part thought filter in every generateContentStream consumer.
 
 ## Security invariants
@@ -29,9 +30,15 @@
 - Refusal string, exactly: "I don't have that in the provided documents."
 - Throttle message: "We're experiencing high demand — please try again in a little while."
 - Unavailable message: "This assistant is currently unavailable."
+- Answer model LOCKED 2026-07-18: QUERY_MODEL=`gemini-3.1-flash-lite`, thinkingLevel=`MEDIUM` (staff + widget). Validated on 2 independent 20Q sets with zero fabrications. Do not change model/thinking to chase retrieval soft-fails — see `eval/DECISION_LOG.md`.
 - Retrieval is SINGLE-TURN by design (V1): only the current question (plus expansion terms) goes to File Search — never prior turns. Conversational follow-up rewriting is a V2 feature; do not add it ad hoc.
 - Consent is single-step: the ask message folds consent in, and the EXACT rendered sentence is stored verbatim as consent_text. Never store a lead without it.
 - Refusal turns never emit citations and never trigger lead capture.
+
+## Known limitations — File Search (do not patch in query path)
+- Earlier “~60% stochastic miss on dense/borderline rows” was **largely attributable to null `file_search_document_name`** (wrong op field + broken list backfill). Once indexing is correct, original IFZA PDF scored **18/20** vs clean md **16/20** (2026-07-19). Residual File Search stochasticity is **unquantified** — do not cite the old ~60% figure.
+- Eval regression cases (not known product soft-fails): Meydan WPS miss (fresh-Q14); occasional dual-column / dual-label fee picks (e.g. Q10 standard vs discounted package price). O1 (add shareholder) and Q11 (add activities) **PASS** on a correctly indexed PDF — keep them in `eval/known-soft-fail-regressions.json` as regression fixtures only, not as open limitations.
+- **Phase 2 clean-file conversion is SHELVED** (premise falsified). Never dual-query / move-question-out-of-contents / parallel snippet hacks in the query path without an explicit scoped decision. Phase 1 probe = index-health / regression detection only — see `docs/INGESTION_QUALITY_PIPELINE_DESIGN.md`.
 
 ## Error handling
 - Never swallow errors into generic messages. Surface code + message. Masked errors repeatedly hid real bugs in this project (a mapped-to-404 loader error, a silently failing audit insert, a throttle message covering RPC failures).

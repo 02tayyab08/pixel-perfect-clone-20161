@@ -1,0 +1,415 @@
+{
+  "when": "2026-07-19T01:12:43.359Z",
+  "pdf": {
+    "documentId": "9a230fcd-4174-481d-8dfd-92048277ff33",
+    "fileSearchDocumentName": "fileSearchStores/salnisharedv1-xzrra1r9bqem/documents/ifzaoriginalcalibrationpdf-j0wai802xt7q",
+    "numpages": 15,
+    "extractChars": 15676,
+    "denseQuestionCount": 5,
+    "denseQuestionNeed": 4,
+    "denseCoverageOk": true,
+    "questions": [
+      {
+        "i": 1,
+        "question": "What is the maximum number of business activities allowed per license?",
+        "expectedAtom": "7",
+        "bestPage": 1,
+        "bestScore": 5,
+        "pagesHit": [
+          1,
+          10,
+          3
+        ],
+        "inDensePages8to14": true,
+        "preview": "IFZA Headquarters, Dubai Digital Park Buildings A2, A3, B5 to B8, P.O. Box 342001, Dubai, UAE – Local Toll Free: 800-IFZ"
+      },
+      {
+        "i": 2,
+        "question": "What is the cost of an Establishment Card renewal?",
+        "expectedAtom": "AED 2,200",
+        "bestPage": 1,
+        "bestScore": 4,
+        "pagesHit": [
+          1,
+          2,
+          3
+        ],
+        "inDensePages8to14": false,
+        "preview": "IFZA Headquarters, Dubai Digital Park Buildings A2, A3, B5 to B8, P.O. Box 342001, Dubai, UAE – Local Toll Free: 800-IFZ"
+      },
+      {
+        "i": 3,
+        "question": "How many working days does it take for license issuance?",
+        "expectedAtom": "5 – 6 working days",
+        "bestPage": 4,
+        "bestScore": 5,
+        "pagesHit": [
+          4,
+          12,
+          1
+        ],
+        "inDensePages8to14": true,
+        "preview": "s Step 5. Submit license application on Partner Portal. • 15% Extra Discount on 2-Year License • 20% Extr"
+      },
+      {
+        "i": 4,
+        "question": "What is the extra discount percentage for a 5-year license?",
+        "expectedAtom": "30%",
+        "bestPage": 4,
+        "bestScore": 5,
+        "pagesHit": [
+          4,
+          7,
+          5
+        ],
+        "inDensePages8to14": false,
+        "preview": "s Step 5. Submit license application on Partner Portal. • 15% Extra Discount on 2-Year License • 20% Extr"
+      },
+      {
+        "i": 5,
+        "question": "What is the fee for an additional individual shareholder?",
+        "expectedAtom": "AED 350",
+        "bestPage": 10,
+        "bestScore": 4,
+        "pagesHit": [
+          10,
+          1,
+          13
+        ],
+        "inDensePages8to14": true,
+        "preview": "r letter and auto renewal. IFZA"
+      },
+      {
+        "i": 6,
+        "question": "What is the cost of a VIP Medical and EID service?",
+        "expectedAtom": "AED 3,500",
+        "bestPage": 15,
+        "bestScore": 3,
+        "pagesHit": [
+          15
+        ],
+        "inDensePages8to14": false,
+        "preview": "IFZA Letters and NOCs AED 400 per document IFZA Document Attestation AED 400 per document NOC - To be a Shar"
+      },
+      {
+        "i": 7,
+        "question": "What is the fee for a Visa Status Change if the applicant is inside the UAE?",
+        "expectedAtom": "AED 1,600",
+        "bestPage": 11,
+        "bestScore": 6,
+        "pagesHit": [
+          11,
+          1,
+          2
+        ],
+        "inDensePages8to14": true,
+        "preview": "e Downpayment (Lock and secure) (Will be deducted from the final Business License Package Price) AED 5,000 Genera"
+      },
+      {
+        "i": 8,
+        "question": "What is the cost of a standard company stamp?",
+        "expectedAtom": "AED 120",
+        "bestPage": 15,
+        "bestScore": 3,
+        "pagesHit": [
+          15,
+          8,
+          12
+        ],
+        "inDensePages8to14": true,
+        "preview": "IFZA Letters and NOCs AED 400 per document IFZA Document Attestation AED 400 per document NOC - To be a Shar"
+      }
+    ],
+    "autoProbe": {
+      "grounded": 8,
+      "total": 8,
+      "rate": 1,
+      "cls": "ok",
+      "details": [
+        {
+          "q": "What is the maximum number of business activities allowed per license?",
+          "atom": "7",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "The maximum number of business activities allowed per license is 7.\n\nEach business license package includes three business activities free of charge, and additional business activities may be requested up to the maximum limit of 7 for an additional fee."
+        },
+        {
+          "q": "What is the cost of an Establishment Card renewal?",
+          "atom": "AED 2,200",
+          "grounded": true,
+          "chunks": 3,
+          "textAns": "The cost for an Establishment Card renewal is AED 2,200.\n\nPlease note that a penalty of AED 1,000 applies for late Establishment Card (E-Card) renewal after the initial grace period."
+        },
+        {
+          "q": "How many working days does it take for license issuance?",
+          "atom": "5 – 6 working days",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "It takes **5–6 working days** for license issuance.\n\nPlease note the following conditions regarding this timeline:\n*   The process begins only after all required documents and the Proof of Payment (POP) have been provided.\n*   Official days off and weekends are not included in the timeline.\n*   Time"
+        },
+        {
+          "q": "What is the extra discount percentage for a 5-year license?",
+          "atom": "30%",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "The extra discount percentage for a 5-year license is 30%."
+        },
+        {
+          "q": "What is the fee for an additional individual shareholder?",
+          "atom": "AED 350",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The fee for an additional individual shareholder is AED 350. \n\nPlease note that three individual shareholders are included in each Business License Package, and requests for additional individual shareholders are subject to the approval of the Authority."
+        },
+        {
+          "q": "What is the cost of a VIP Medical and EID service?",
+          "atom": "AED 3,500",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The cost of the VIP Medical and EID service is AED 3,500."
+        },
+        {
+          "q": "What is the fee for a Visa Status Change if the applicant is inside the UAE?",
+          "atom": "AED 1,600",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "The fee for a Visa Status Change when the applicant is inside the UAE is AED 1,600."
+        },
+        {
+          "q": "What is the cost of a standard company stamp?",
+          "atom": "AED 120",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The cost of a standard company stamp is AED 120. If you require a company stamp with a logo, the cost is AED 240."
+        }
+      ]
+    },
+    "knownFailQueries": [
+      {
+        "question": "General Trading fee waiver",
+        "grounded": true,
+        "chunks": 1,
+        "textAns": "The additional fee for General Trading activity is waived for new applications and the next three renewals (a total of 4 years)."
+      },
+      {
+        "question": "Cross Business Activity Fee waived",
+        "grounded": true,
+        "chunks": 1,
+        "textAns": "The Cross Business Activity Fee is waived for new applications and the next three renewals (a total of 4 years)."
+      },
+      {
+        "question": "establishment card renewal fee",
+        "grounded": true,
+        "chunks": 4,
+        "textAns": "The renewal fee for an Establishment Card (E-Card) is **AED 2,200**.\n\nPlease note that a penalty of **AED 1,000** applies for late renewal of an Establishment Card after the initial grace period, with an additional AED 1,000 charged for every month thereafter."
+      }
+    ]
+  },
+  "rates": [
+    {
+      "id": "ifza-pdf-bad",
+      "label": "original IFZA PDF (known bad)",
+      "expectRank": "bad",
+      "fsName": "fileSearchStores/salnisharedv1-xzrra1r9bqem/documents/ifzaoriginalcalibrationpdf-j0wai802xt7q",
+      "documentId": "9a230fcd-4174-481d-8dfd-92048277ff33",
+      "grounded": 8,
+      "total": 8,
+      "rate": 1,
+      "cls": "ok",
+      "details": [
+        {
+          "q": "What is the maximum number of business activities allowed per license?",
+          "atom": "7",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "The maximum number of business activities allowed per license is 7.\n\nEach business license package includes three business activities free of charge, and additional business activities may be requested up to the maximum limit of 7 for an additional fee."
+        },
+        {
+          "q": "What is the cost of an Establishment Card renewal?",
+          "atom": "AED 2,200",
+          "grounded": true,
+          "chunks": 3,
+          "textAns": "The cost for an Establishment Card renewal is AED 2,200.\n\nPlease note that a penalty of AED 1,000 applies for late Establishment Card (E-Card) renewal after the initial grace period."
+        },
+        {
+          "q": "How many working days does it take for license issuance?",
+          "atom": "5 – 6 working days",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "It takes **5–6 working days** for license issuance.\n\nPlease note the following conditions regarding this timeline:\n*   The process begins only after all required documents and the Proof of Payment (POP) have been provided.\n*   Official days off and weekends are not included in the timeline.\n*   Time"
+        },
+        {
+          "q": "What is the extra discount percentage for a 5-year license?",
+          "atom": "30%",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "The extra discount percentage for a 5-year license is 30%."
+        },
+        {
+          "q": "What is the fee for an additional individual shareholder?",
+          "atom": "AED 350",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The fee for an additional individual shareholder is AED 350. \n\nPlease note that three individual shareholders are included in each Business License Package, and requests for additional individual shareholders are subject to the approval of the Authority."
+        },
+        {
+          "q": "What is the cost of a VIP Medical and EID service?",
+          "atom": "AED 3,500",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The cost of the VIP Medical and EID service is AED 3,500."
+        },
+        {
+          "q": "What is the fee for a Visa Status Change if the applicant is inside the UAE?",
+          "atom": "AED 1,600",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "The fee for a Visa Status Change when the applicant is inside the UAE is AED 1,600."
+        },
+        {
+          "q": "What is the cost of a standard company stamp?",
+          "atom": "AED 120",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The cost of a standard company stamp is AED 120. If you require a company stamp with a logo, the cost is AED 240."
+        }
+      ]
+    },
+    {
+      "id": "meydan-docx-mixed",
+      "label": "Meydan license docx (mixed)",
+      "expectRank": "mixed",
+      "documentId": "23966c5c-1d99-46a8-bb5c-41d71bbc587e",
+      "grounded": 8,
+      "total": 8,
+      "rate": 1,
+      "cls": "ok",
+      "details": [
+        {
+          "q": "What is the standard license fee for the Meydan free zone?",
+          "atom": "12500 AED",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "The standard license fee for the Meydan Free Zone is 12,500 AED. This fee includes a shared work desk."
+        },
+        {
+          "q": "How much does the establishment card cost?",
+          "atom": "2020 AED",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The establishment card costs 2020 AED."
+        },
+        {
+          "q": "What is the cost of an investor visa?",
+          "atom": "4020",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The cost of an investor visa is 4,020 AED. Additionally, each visa requires a quota allocation (1,850 AED), medical fees (320 AED), and Emirates ID fees (385 AED). If the applicant is already inside the country, a change status fee of 1,520 AED also applies."
+        },
+        {
+          "q": "What is the fee for a change of status if the employee is inside the country?",
+          "atom": "1520 AED",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The fee for a change of status if the employee is inside the country is 1520 AED."
+        },
+        {
+          "q": "What is the reduced quota allocation fee if a company takes 50 quotas?",
+          "atom": "1000 AED",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "If a company takes 50 quota allocations, the fee is reduced to 1,000 AED per quota."
+        },
+        {
+          "q": "How many licenses can a customer get under one license in Meydan free zone?",
+          "atom": "3",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "In the Meydan Free Zone, a customer can obtain up to 3 licenses under one license. This allows a customer to combine different activities, such as transport, trading, marketing, and e-commerce, within a single license."
+        },
+        {
+          "q": "What is the monthly pension contribution cost for a UAE national employee?",
+          "atom": "1400 AED",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "According to the provided documents, the pension contribution for a UAE national employee is 1,400 AED per month."
+        },
+        {
+          "q": "What is the total license renewal cost for a Meydan free zone company with 60 employees?",
+          "atom": "12500 AED",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The total license renewal cost for a Meydan Free Zone company with 60 employees is **72,500 AED**.\n\nThis is calculated as follows:\n*   **License renewal cost:** 12,500 AED\n*   **Quota cost for 60 employees:** 60,000 AED (calculated at 1,000 AED per quota)"
+        }
+      ]
+    },
+    {
+      "id": "ifza-md-good",
+      "label": "IFZA_Complete_Schedule_of_Fees_2024.md (known good)",
+      "expectRank": "good",
+      "documentId": "ccf0a112-fd5a-450e-a8e2-2aa97127a796",
+      "grounded": 8,
+      "total": 8,
+      "rate": 1,
+      "cls": "ok",
+      "details": [
+        {
+          "q": "How many business activities are included free of charge in an IFZA Business License package?",
+          "atom": "3",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "Each IFZA Business License package includes three business activities free of charge. You may add additional business activities for a fee of AED 1,000 each, up to a maximum of seven activities."
+        },
+        {
+          "q": "What is the maximum number of business activities allowed under an IFZA license?",
+          "atom": "7",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "The maximum number of business activities allowed under an IFZA license is 7.\n\nEach IFZA Business License package includes three business activities free of charge. You may add additional activities beyond these three for a fee of AED 1,000 per activity, up to the maximum limit of 7."
+        },
+        {
+          "q": "What is the standard price for a 1-year Zero Visa License in AED?",
+          "atom": "12,900",
+          "grounded": true,
+          "chunks": 2,
+          "textAns": "The standard price for a 1-year Zero Visa License is **AED 12,900**."
+        },
+        {
+          "q": "What is the discount percentage for a 5-year IFZA license?",
+          "atom": "30%",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The discount percentage for a 5-year IFZA license is 30%."
+        },
+        {
+          "q": "What is the fee for an initial Establishment Card application?",
+          "atom": "2,000",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The fee for an initial Establishment Card application is 2,000 AED."
+        },
+        {
+          "q": "How many working days does it typically take for IFZA license issuance?",
+          "atom": "5–6",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "It typically takes **5–6 working days** for IFZA license issuance.\n\nPlease note the following conditions regarding this timeline:\n*   **Process Start:** The timeline begins after you have provided the required documents and the Proof of Payment (POP).\n*   **Exclusions:** Official days off and weeken"
+        },
+        {
+          "q": "What is the fee for a standard Salary Certificate (3 working days)?",
+          "atom": "250",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The fee for a standard Salary Certificate (3 working days) is AED 250."
+        },
+        {
+          "q": "What is the penalty fee for late Business License renewal per month after the grace period?",
+          "atom": "1,000",
+          "grounded": true,
+          "chunks": 1,
+          "textAns": "The penalty fee for late Business License renewal is AED 1,000 for every month after the initial grace period."
+        }
+      ]
+    }
+  ]
+}

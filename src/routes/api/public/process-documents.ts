@@ -19,6 +19,7 @@ type ClaimedRow = {
   organization_id: string;
   file_name: string;
   mime_type: string | null;
+  size_bytes: number | null;
   storage_path: string;
 };
 
@@ -126,7 +127,11 @@ async function processOne(row: ClaimedRow) {
         })) as typeof current;
       }
 
-      const resource = current.response?.name ?? null;
+      // SDK may return documentName (not name) when the long-running op completes.
+      const resource =
+        current.response?.name ??
+        (current.response as { documentName?: string } | undefined)?.documentName ??
+        null;
 
       await svc.rpc("update_document_status", {
         p_document_id: row.id,
@@ -134,6 +139,36 @@ async function processOne(row: ClaimedRow) {
         p_file_search_name: resource,
         p_error: null,
       });
+
+      // Phase 1: best-effort retrieval self-probe (warn-only). Failures must
+      // not fail the document index — cron /api/public/probe-documents retries
+      // any ready doc still missing a probe row.
+      try {
+        const { runDocumentProbe, persistDocumentProbe } = await import(
+          "@/lib/document-probe.server"
+        );
+        const probeInput = {
+          documentId: row.id,
+          organizationId: row.organization_id,
+          fileName: row.file_name,
+          mimeType: row.mime_type,
+          sizeBytes: row.size_bytes ?? objSize,
+          storagePath: row.storage_path as string,
+          fileSearchStoreName: org.file_search_store_name ?? null,
+        };
+        const outcome = await runDocumentProbe(probeInput);
+        await persistDocumentProbe(probeInput, outcome);
+        console.log(
+          `[process-documents] probe doc=${row.id} class=${outcome.probeClass} ` +
+            `rate=${outcome.successRate ?? "n/a"}`,
+        );
+      } catch (probeErr) {
+        console.error(
+          "[process-documents] probe deferred to cron",
+          row.id,
+          probeErr instanceof Error ? probeErr.message : String(probeErr),
+        );
+      }
       return;
     } catch (e) {
       lastErr = e;
