@@ -1,12 +1,21 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getEmbedOrgBySlugFn } from "@/lib/widget.functions";
+import { AssistantMarkdown } from "@/components/assistant-markdown";
+import { useChatAutoscroll } from "@/hooks/use-chat-autoscroll";
+import {
+  buildCitationPresentation,
+  type CitationSource,
+  type GroundingChunkRow,
+  type GroundingSupportRow,
+} from "@/lib/citations";
 
 type Msg = {
   role: "user" | "assistant";
   content: string;
+  markedContent?: string;
   isRefusal?: boolean;
-  citations?: Array<{ source_title: string | null; page: number | null; snippet?: string | null }>;
+  citations?: CitationSource[];
 };
 
 type OrgBranding = {
@@ -89,7 +98,12 @@ function EmbedPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeCite, setActiveCite] = useState<{ msgIdx: number; n: number } | null>(
+    null,
+  );
+  const lastContent = messages[messages.length - 1]?.content ?? "";
+  const { containerRef, bottomRef, lastUserRef, markUserSent, onScroll } =
+    useChatAutoscroll(lastContent, busy);
 
   // Boot: end_user_ref + saved locale, rehydrate last conversation.
   useEffect(() => {
@@ -129,10 +143,6 @@ function EmbedPage() {
     if (org.id) localStorage.setItem(`salni.locale.${org.id}`, locale);
   }, [locale, org.id]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
-
   const t = useMemo(
     () =>
       locale === "ar"
@@ -159,6 +169,7 @@ function EmbedPage() {
     if (!text || busy || !endUserRef) return;
     setInput("");
     setBusy(true);
+    markUserSent();
     setMessages((m) => [...m, { role: "user", content: text }, { role: "assistant", content: "" }]);
 
     let res: Response;
@@ -202,7 +213,8 @@ function EmbedPage() {
     const dec = new TextDecoder();
     let buf = "";
     let acc = "";
-    let cits: Msg["citations"] = [];
+    let cits: CitationSource[] = [];
+    let markedContent: string | undefined;
     let isRefusal = false;
     while (true) {
       const { value, done } = await reader.read();
@@ -218,16 +230,25 @@ function EmbedPage() {
           if (obj.type === "conversation") setConversationId(obj.id);
           else if (obj.type === "delta") acc += obj.text;
           else if (obj.type === "override") acc = obj.text;
-          else if (obj.type === "citations") cits = obj.rows;
-          else if (obj.type === "meta") {
+          else if (obj.type === "citations") {
+            const chunks = (obj.chunks ?? []) as GroundingChunkRow[];
+            const supports = (obj.supports ?? []) as GroundingSupportRow[];
+            const plan = buildCitationPresentation(acc, chunks, supports);
+            cits = plan.sources;
+            markedContent = plan.markedMarkdown;
+          } else if (obj.type === "meta") {
             isRefusal = !!obj.isRefusal;
-            if (isRefusal) cits = [];
+            if (isRefusal) {
+              cits = [];
+              markedContent = undefined;
+            }
           } else if (obj.type === "error") acc = `⚠ ${obj.message}`;
           setMessages((m) => {
             const copy = [...m];
             copy[copy.length - 1] = {
               role: "assistant",
               content: acc,
+              markedContent: isRefusal ? undefined : markedContent,
               citations: isRefusal ? [] : cits,
               isRefusal,
             };
@@ -301,39 +322,91 @@ function EmbedPage() {
         </button>
       </header>
 
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        className="flex-1 space-y-3 overflow-y-auto px-4 py-4"
+      >
         {messages.length === 0 ? (
           <p className="text-center text-xs text-slate-400">{t.hint}</p>
         ) : null}
-        {messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "text-right" : ""}>
+        {messages.map((m, i) => {
+          const isLastUser =
+            m.role === "user" &&
+            (i === messages.length - 1 ||
+              (i === messages.length - 2 && messages[i + 1]?.role === "assistant"));
+          const streamingThis = busy && i === messages.length - 1;
+          const showMarked =
+            m.role === "assistant" &&
+            !m.isRefusal &&
+            !streamingThis &&
+            !!m.markedContent;
+          return (
             <div
-              className="inline-block max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm"
-              style={
-                m.role === "user"
-                  ? { background: primary, color: "white" }
-                  : { background: "#f1f5f9", color: "#0f172a" }
-              }
+              key={i}
+              ref={isLastUser ? lastUserRef : undefined}
+              className={m.role === "user" ? "text-right" : ""}
             >
-              {m.content || (busy && i === messages.length - 1 ? "…" : "")}
-            </div>
-            {!m.isRefusal && m.citations && m.citations.length > 0 ? (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {m.citations.map((c, j) => (
-                  <span
-                    key={j}
-                    className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500"
-                    title={c.snippet ?? ""}
-                  >
-                    <span className="font-semibold text-slate-700">[{j + 1}]</span>
-                    <span className="max-w-[10rem] truncate">{c.source_title ?? "source"}</span>
-                    {c.page ? <span>· p.{c.page}</span> : null}
-                  </span>
-                ))}
+              <div
+                className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                  m.role === "user" ? "whitespace-pre-wrap" : "text-left"
+                }`}
+                style={
+                  m.role === "user"
+                    ? { background: primary, color: "white" }
+                    : { background: "#f1f5f9", color: "#0f172a" }
+                }
+              >
+                {m.role === "assistant" ? (
+                  m.content ? (
+                    <AssistantMarkdown
+                      content={showMarked ? m.markedContent! : m.content}
+                      activeCite={
+                        activeCite?.msgIdx === i ? activeCite.n : null
+                      }
+                      onCiteClick={(n) => {
+                        setActiveCite({ msgIdx: i, n });
+                        requestAnimationFrame(() => {
+                          document
+                            .querySelector(`[data-cite-chip="${i}-${n}"]`)
+                            ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                        });
+                      }}
+                    />
+                  ) : busy && i === messages.length - 1 ? (
+                    "…"
+                  ) : null
+                ) : (
+                  m.content
+                )}
               </div>
-            ) : null}
-          </div>
-        ))}
+              {!m.isRefusal && m.citations && m.citations.length > 0 && !streamingThis ? (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {m.citations.map((c) => (
+                    <button
+                      key={c.n}
+                      type="button"
+                      data-cite-chip={`${i}-${c.n}`}
+                      onClick={() => setActiveCite({ msgIdx: i, n: c.n })}
+                      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+                        activeCite?.msgIdx === i && activeCite.n === c.n
+                          ? "border-slate-400 bg-slate-100 text-slate-800"
+                          : "border-slate-200 bg-white text-slate-500"
+                      }`}
+                    >
+                      <span className="font-semibold text-slate-700">[{c.n}]</span>
+                      <span className="max-w-[10rem] truncate">
+                        {c.source_title ?? "source"}
+                      </span>
+                      {c.page ? <span>· p.{c.page}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        <div ref={bottomRef} aria-hidden className="h-px w-full" />
       </div>
 
       <form

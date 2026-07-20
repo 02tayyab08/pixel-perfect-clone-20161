@@ -5,6 +5,11 @@ import { getCurrentUser } from "@/lib/session.server";
 import { salniService, salniAsUser } from "@/lib/supabase.server";
 import { bootstrapStore } from "@/lib/store-bootstrap.server";
 import { gemini, QUERY_MODEL, EXPANSION_MODEL } from "@/lib/gemini.server";
+import {
+  buildCitationPresentation,
+  mapGroundingChunks,
+  normalizeSupportsPayload,
+} from "@/lib/citations";
 import { SetupInProgressError, isSetupInProgressPayload } from "@/lib/errors";
 import { extractStreamUsage, logAnswerCost, logQuestionCostTotal } from "@/lib/cost-log.server";
 import type { CallCostBreakdown } from "@/lib/cost-log.server";
@@ -292,6 +297,7 @@ export const Route = createFileRoute("/api/query")({
             const startedAt = Date.now();
             let fullText = "";
             let groundingChunks: unknown[] = [];
+            let groundingSupports: unknown[] = [];
             let groundingSupportsLen = 0;
             let groundingSupportsSample: unknown = undefined;
             let streamErrored = false;
@@ -429,9 +435,12 @@ export const Route = createFileRoute("/api/query")({
                 }
                 const gs = (gm as { groundingSupports?: unknown[] } | undefined)
                   ?.groundingSupports;
-                if (Array.isArray(gs) && gs.length > groundingSupportsLen) {
-                  groundingSupportsLen = gs.length;
-                  groundingSupportsSample = gs[0];
+                if (Array.isArray(gs) && gs.length > 0) {
+                  groundingSupports = gs;
+                  if (gs.length > groundingSupportsLen) {
+                    groundingSupportsLen = gs.length;
+                    groundingSupportsSample = gs[0];
+                  }
                 }
               }
               console.log(
@@ -559,44 +568,31 @@ export const Route = createFileRoute("/api/query")({
                 .select("id")
                 .single();
               if (msgRow?.id && !isRefusal && groundingChunks.length > 0) {
-                const rows = groundingChunks
-                  .map((raw) => {
-                    const c = raw as {
-                      retrievedContext?: {
-                        title?: string;
-                        text?: string;
-                        pageNumber?: number;
-                        customMetadata?: Array<{ key: string; stringValue?: string }>;
-                      };
-                    };
-                    const rc = c.retrievedContext;
-                    if (!rc) return null;
-                    const meta = rc.customMetadata ?? [];
-                    const docId =
-                      meta.find((m) => m.key === "document_id")?.stringValue ?? null;
-                    return {
-                      message_id: msgRow.id,
-                      organization_id: parsed.orgId,
-                      document_id: docId,
-                      source_title: rc.title ?? "Untitled source",
-                      snippet: rc.text ?? null,
-                      page: rc.pageNumber ?? null,
-                    };
-                  })
-                  .filter((v): v is NonNullable<typeof v> => v !== null);
-                // Dedupe by document_id (fallback source_title) + page,
-                // preserving Gemini's original relevance order.
-                const seen = new Set<string>();
-                const deduped = rows.filter((r) => {
-                  const key = `${r.document_id ?? r.source_title}|${r.page ?? ""}`;
-                  if (seen.has(key)) return false;
-                  seen.add(key);
-                  return true;
-                });
-                if (deduped.length > 0) {
-                  await svc.from("citations").insert(deduped);
-                  send({ type: "citations", rows: deduped });
+                const chunkRows = mapGroundingChunks(groundingChunks);
+                const supportRows = normalizeSupportsPayload(groundingSupports);
+                const plan = buildCitationPresentation(
+                  fullText,
+                  chunkRows,
+                  supportRows,
+                );
+                // Persist only sources actually used by supports (not all retrieved).
+                const dbRows = plan.sources.map((s) => ({
+                  message_id: msgRow.id,
+                  organization_id: parsed.orgId,
+                  document_id: s.document_id,
+                  source_title: s.source_title ?? "Untitled source",
+                  snippet: s.snippet,
+                  page: s.page,
+                }));
+                if (dbRows.length > 0) {
+                  await svc.from("citations").insert(dbRows);
                 }
+                // Transport: forward chunks + supports for client-side markers.
+                send({
+                  type: "citations",
+                  chunks: chunkRows,
+                  supports: supportRows,
+                });
               }
               await svc.rpc("record_query_usage", { p_org: parsed.orgId });
             } catch (e) {

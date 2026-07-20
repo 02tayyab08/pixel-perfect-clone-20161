@@ -7,7 +7,7 @@
     "path": "staff /api/query unless noted"
   },
   "policy": "Do NOT attempt to fix these in the query path. These are regression fixtures for eval re-runs — not open product limitations and not drivers for clean-file conversion (Phase 2 SHELVED 2026-07-19).",
-  "infra_note": "Prior 'dense PDF unretrievable' / high miss rates were largely null file_search_document_name (response.documentName vs name; list pager .page vs .documents). On correctly indexed original IFZA PDF (2026-07-19): fresh-20 = 18/20; O1 PASS; Q11 PASS.",
+  "infra_note": "Prior 'dense PDF unretrievable' / high miss rates were largely null file_search_document_name. Mirror PDF fresh-20 = 18/20; SSE PDF fresh-20 = 19/20 (2026-07-19).",
   "cases": [
     {
       "id": "fresh-Q3",
@@ -15,7 +15,8 @@
       "question": "What's the fee for a Company Employee List?",
       "expect": "400",
       "observed_on_md_2026_07_18": "Hard refusal (retrieval miss)",
-      "observed_on_pdf_2026_07_19": "PASS (g=1)",
+      "observed_on_pdf_mirror_2026_07_19": "PASS (g=1)",
+      "observed_on_pdf_sse_2026_07_19": "PASS (g=1)",
       "status": "resolved-on-correct-index",
       "class": "was-retrieval-miss"
     },
@@ -24,52 +25,94 @@
       "set": "fresh-20-2026-07-18",
       "question": "Cost to add 2 extra business activities beyond the free three?",
       "expect": "2 × 1,000 = 2,000 (setup Extra Business Activity only; no amendment)",
-      "observed_on_md_2026_07_18": "Correct 1,000×2 setup math AND also Change/Adding/Removing of Activity = 2,000 amendment line (scored FAIL soft-fail)",
-      "observed_on_pdf_2026_07_19": "PASS — both setup and amendment surfaced; numbers pass",
+      "observed_on_md_2026_07_18": "Setup + amendment dual-surface (scored FAIL soft-fail)",
+      "observed_on_pdf_mirror_2026_07_19": "PASS — both setup and amendment",
+      "observed_on_pdf_sse_2026_07_19": "PASS — setup 1,000/activity only (g=1); no amendment conflation this run",
       "status": "regression-fixture-only",
-      "class": "action-verb-setup-vs-amendment",
-      "note": "Not an open known limitation. Keep in eval set; do not cite as product soft-fail."
+      "class": "action-verb-setup-vs-amendment"
     },
     {
       "id": "fresh-Q14",
       "set": "fresh-20-2026-07-18",
       "question": "Does Meydan require WPS?",
       "expect": "no",
-      "observed_on_md_2026_07_18": "Hard refusal (retrieval miss)",
-      "observed_on_pdf_2026_07_19": "Hard refusal (g=0) — Meydan-doc issue, both corpora",
-      "status": "open-eval-miss",
-      "class": "retrieval-miss-meydan"
+      "observed_on_md_2026_07_18": "Hard refusal",
+      "observed_on_pdf_mirror_2026_07_19": "Hard refusal (g=0)",
+      "observed_on_pdf_sse_2026_07_19": "Auto-scored PASS but answer hedges — quotes 'no wps require' from mainland-renewal context and says docs don't confirm for Meydan (g=1). Scorer false-positive risk on \\bno\\b.",
+      "status": "open-eval-weak",
+      "class": "retrieval-incomplete-meydan-wps"
     },
     {
       "id": "fresh-Q16",
-      "set": "fresh-20-2026-07-18",
+      "set": "fresh-20-sse-pdf-2026-07-19",
       "question": "Compare establishment card costs between IFZA and Meydan.",
       "expect": "IFZA 2,000 init / 2,200 renewal; Meydan 2,020",
-      "observed_on_md_2026_07_18": "Meydan 2,020 OK; IFZA initial/renewal lines missed",
-      "observed_on_pdf_2026_07_19": "PASS (g=3)",
-      "status": "resolved-on-correct-index",
-      "class": "was-retrieval-incomplete-cross-doc"
+      "observed_on_md_2026_07_18": "Meydan OK; IFZA incomplete",
+      "observed_on_pdf_mirror_2026_07_19": "PASS (g=3)",
+      "observed_on_pdf_sse_2026_07_19": "FAIL — claimed Meydan absent; grounding=4",
+      "grounding_chunk_sources_sse_2026_07_19": [
+        "Ifza - Licesen cost - Shedule off charges (1).pdf",
+        "Ifza - Licesen cost - Shedule off charges (1).pdf",
+        "Ifza - Licesen cost - Shedule off charges (1).pdf",
+        "Ifza - Licesen cost - Shedule off charges (1).pdf"
+      ],
+      "status": "open-known-limitation",
+      "class": "retrieval-ranking-cross-doc",
+      "note": "All 4 grounding chunks were IFZA PDF; zero Meydan. Not model-ignored-content — File Search ranked only IFZA for a compare question. Meydan est-card (2020) was retrievable on adjacent Q15 same run. Do not fix in query path from this observation alone."
     },
     {
       "id": "O1",
       "set": "open-ended-prior",
       "question": "I want to add an individual shareholder to my IFZA company. What fee do I pay?",
-      "expect": "Both Additional Individual Shareholder ≈ 350 (setup) AND Change/Adding/Removing of Shareholder ≈ 2,000 (amendment), distinctly labeled",
-      "observed_historically": "Often amendment 2,000 only; setup 350 intermittently retrieved",
-      "observed_on_pdf_2026_07_19": "PASS — both 350 and 2,000 (g=2)",
+      "expect": "Both setup ≈ 350 AND amendment ≈ 2,000",
+      "observed_on_pdf_mirror_2026_07_19": "PASS — both 350 and 2,000 (g=2)",
       "status": "regression-fixture-only",
-      "class": "action-verb-setup-vs-amendment",
-      "note": "Not an open known limitation. Keep in eval set; do not re-architect query path."
+      "class": "action-verb-setup-vs-amendment"
+    },
+    {
+      "id": "reg-visa-amend-conflation",
+      "alias": "Q17",
+      "set": "permanent-regression",
+      "question": "What's the difference between the Investor Visa Add-On fee and the Visa Amendment fee? Quote both exact labels and figures.",
+      "expect": "Investor Visa Add-On = 1,000; Visa Amendment = 2,000–4,000 (must not collapse Amendment to 1,000)",
+      "observed_on_original_pdf": "Quoted Visa Amendment = AED 1,000 — same figure as Investor Visa Add-On (label/figure swap)",
+      "head_to_head_2026_07_19": {
+        "path": "SSE /api/query",
+        "original_pdf": "0/3 PASS",
+        "clean_md_fixture": "3/3 PASS",
+        "raw": "eval/reg-visa-cross-pdf-vs-md-2026-07-19.json"
+      },
+      "class": "fee-label-figure-conflation",
+      "status": "open-known-limitation",
+      "note": "Classic swap-test. Fresh-20 never included this. Clean structured labels fix it; dense PDF fails consistently (0/3)."
+    },
+    {
+      "id": "reg-cross-biz-waiver",
+      "alias": "Q3",
+      "set": "permanent-regression",
+      "question": "Is the Cross Business Activity Fee waived? Quote the exact condition and effective amount for a new application.",
+      "expect": "Waived for new applications and the next three renewals (4 years); effective 0 for new application",
+      "observed_on_original_pdf": "Previously claimed exemption not stated in documents (batch contradiction)",
+      "head_to_head_2026_07_19": {
+        "path": "SSE /api/query",
+        "original_pdf": "3/3 PASS",
+        "clean_md_fixture": "3/3 PASS",
+        "raw": "eval/reg-visa-cross-pdf-vs-md-2026-07-19.json"
+      },
+      "class": "retrieval-miss-stated-waiver",
+      "status": "intermittent-on-pdf",
+      "note": "Waiver is on PDF ~p9. Intermittent on dense PDF (user saw miss; this H2H 3/3 pass). Clean md 3/3. Keep in permanent set."
     },
     {
       "id": "fresh-Q10",
       "set": "fresh-20-pdf-2026-07-19",
       "question": "New IFZA company, 3-year Zero Visa license, plus establishment card — total upfront?",
-      "expect": "discounted 31,000 + est card 2,000 (md label: Zero Visa | 3-Year (20% off))",
-      "observed_on_pdf_2026_07_19": "FAIL — quoted standard 38,700 + 2,000; noted discounts may apply",
-      "status": "open-eval-miss",
+      "expect": "discounted 31,000 + est card 2,000",
+      "observed_on_pdf_mirror_2026_07_19": "FAIL — quoted standard 38,700",
+      "observed_on_pdf_sse_2026_07_19": "PASS — 31,000 + 2,000 (g=3)",
+      "status": "intermittent-dual-column",
       "class": "dual-column-standard-vs-discount",
-      "note": "PDF text contains BOTH 38,700 and 31,000 on the same Zero Visa row. Not missing content — column/header disambiguation. Clean md uses explicit '3-Year (20% off)' label. See eval/FRESH20_PDF_VS_MD.md Q10 section."
+      "note": "Same PDF contains both 38,700 and 31,000; path/run variance."
     }
   ]
 }

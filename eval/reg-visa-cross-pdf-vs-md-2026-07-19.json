@@ -1,0 +1,206 @@
+{
+  "when": "2026-07-19T12:45:01.347Z",
+  "path": "SSE /api/query",
+  "config": "gemini-3.1-flash-lite / MEDIUM",
+  "note": "Clean md fixture reconstructed in eval/fixtures/ (production md deleted from Storage). Temporary FS swap only; PDF re-indexed after.",
+  "cases": [
+    {
+      "id": "reg-visa-amend-conflation",
+      "alias": "Q17",
+      "q": "What's the difference between the Investor Visa Add-On fee and the Visa Amendment fee? Quote both exact labels and figures.",
+      "expect": "Investor Visa Add-On = 1,000; Visa Amendment = 2,000–4,000 (not collapsed to 1,000)"
+    },
+    {
+      "id": "reg-cross-biz-waiver",
+      "alias": "Q3",
+      "q": "Is the Cross Business Activity Fee waived? Quote the exact condition and effective amount for a new application.",
+      "expect": "Waived for new applications + next three renewals (4 years); effective 0 for new app"
+    }
+  ],
+  "summary": {
+    "original-pdf": {
+      "reg-visa-amend-conflation": {
+        "alias": "Q17",
+        "passed": 0,
+        "total": 3,
+        "rate": 0
+      },
+      "reg-cross-biz-waiver": {
+        "alias": "Q3",
+        "passed": 3,
+        "total": 3,
+        "rate": 1
+      },
+      "overall": {
+        "passed": 3,
+        "total": 6,
+        "rate": 0.5
+      }
+    },
+    "clean-md": {
+      "reg-visa-amend-conflation": {
+        "alias": "Q17",
+        "passed": 3,
+        "total": 3,
+        "rate": 1
+      },
+      "reg-cross-biz-waiver": {
+        "alias": "Q3",
+        "passed": 3,
+        "total": 3,
+        "rate": 1
+      },
+      "overall": {
+        "passed": 6,
+        "total": 6,
+        "rate": 1
+      }
+    }
+  },
+  "results": [
+    {
+      "corpus": "original-pdf",
+      "caseId": "reg-visa-amend-conflation",
+      "alias": "Q17",
+      "run": 1,
+      "pass": false,
+      "detail": "Visa Amendment collapsed to 1000",
+      "grounding": 2,
+      "refusal": false,
+      "answer": "\"Investor Visa Add-On\" = 1,000\n\"Visa Amendment\" = 1,000\n\nThe provided documents list these two fees as separate items. The \"Investor Visa Add-On\" fee applies when an individual is applying for Investor status, while the \"Visa Amendment\" fee applies to changes made to an existing visa. Because the exact nature of your request (whether you are seeking to add an investor status to a visa or modify existing visa details) is not specified, you should clarify which service you require.",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=848 toolUse=4388 candidates=173 thoughts=0 cached=0 totalTokenCount=5409 totalSum=5409 grounding=2 costUSD=0.001569 latencyMs=7072"
+    },
+    {
+      "corpus": "original-pdf",
+      "caseId": "reg-visa-amend-conflation",
+      "alias": "Q17",
+      "run": 2,
+      "pass": false,
+      "detail": "Visa Amendment collapsed to 1000",
+      "grounding": 3,
+      "refusal": false,
+      "answer": "The \"Investor Visa Add-On\" and the \"Visa Amendment\" are distinct services with different associated fees as listed in the IFZA Schedule of Fees.\n\n\"Investor Visa Add-On\" = AED 1,000\n\"Visa Amendment\" = AED 1,000\n\n*   The **Investor Visa Add-On** fee of AED 1,000 applies when you are adding an Investor status to a visa.\n*   The **Visa Amendment** fee of AED 1,000 is a separate charge for processing amendments to an existing visa.",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=848 toolUse=4388 candidates=203 thoughts=0 cached=0 totalTokenCount=5439 totalSum=5439 grounding=3 costUSD=0.001613 latencyMs=6773"
+    },
+    {
+      "corpus": "original-pdf",
+      "caseId": "reg-visa-amend-conflation",
+      "alias": "Q17",
+      "run": 3,
+      "pass": false,
+      "detail": "Visa Amendment collapsed to 1000",
+      "grounding": 2,
+      "refusal": false,
+      "answer": "\"Investor Visa Add-On\" = 1,000\n\"Visa Amendment\" = 1,000\n\nThe difference between these fees is based on the nature of the request:\n\n*   **Investor Visa Add-On (AED 1,000):** This fee applies as a cost for having the specific status of an Investor associated with a visa.\n*   **Visa Amendment (AED 1,000):** This is a fee associated with modifying an existing visa.\n\nPlease clarify which of these services you are inquiring about to ensure you are referencing the correct fee for your specific situatio",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=848 toolUse=4388 candidates=188 thoughts=0 cached=0 totalTokenCount=5424 totalSum=5424 grounding=2 costUSD=0.001591 latencyMs=6528"
+    },
+    {
+      "corpus": "original-pdf",
+      "caseId": "reg-cross-biz-waiver",
+      "alias": "Q3",
+      "run": 1,
+      "pass": true,
+      "detail": "ok",
+      "grounding": 2,
+      "refusal": false,
+      "answer": "\"Cross Business Activity Fee\" = AED 2,000\n\nYes, the Cross Business Activity Fee is waived for new applications and the next three renewals (a total of 4 years).",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=837 toolUse=3596 candidates=114 thoughts=0 cached=0 totalTokenCount=4547 totalSum=4547 grounding=2 costUSD=0.001279 latencyMs=6460"
+    },
+    {
+      "corpus": "original-pdf",
+      "caseId": "reg-cross-biz-waiver",
+      "alias": "Q3",
+      "run": 2,
+      "pass": true,
+      "detail": "ok",
+      "grounding": 2,
+      "refusal": false,
+      "answer": "The \"Cross Business Activity Fee\" is waived for new applications and the next three renewals (a total of 4 years).\n\nThe standard fee for this activity, when not subject to a waiver, is:\n\n\"<Cross Business Activity Fee>\" = AED 2,000",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=837 toolUse=3296 candidates=119 thoughts=0 cached=0 totalTokenCount=4252 totalSum=4252 grounding=2 costUSD=0.001212 latencyMs=6408"
+    },
+    {
+      "corpus": "original-pdf",
+      "caseId": "reg-cross-biz-waiver",
+      "alias": "Q3",
+      "run": 3,
+      "pass": true,
+      "detail": "ok",
+      "grounding": 2,
+      "refusal": false,
+      "answer": "The \"Cross Business Activity Fee\" is waived for new applications and the next three renewals (a total of 4 years).\n\nOutside of this waiver, the fee is:\n\n\"Cross Business Activity Fee\" = AED 2,000\n\nThis fee applies when combining professional and commercial business activities under one Business License.",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=837 toolUse=3584 candidates=138 thoughts=0 cached=0 totalTokenCount=4559 totalSum=4559 grounding=2 costUSD=0.001312 latencyMs=6601"
+    },
+    {
+      "corpus": "clean-md",
+      "caseId": "reg-visa-amend-conflation",
+      "alias": "Q17",
+      "run": 1,
+      "pass": true,
+      "detail": "ok",
+      "grounding": 2,
+      "refusal": false,
+      "answer": "\"Investor Visa Add-On\" = 1,000\n\"Visa Amendment\" = 2,000–4,000\n\nThe \"Investor Visa Add-On\" is a per-item fee applied when adding an investor visa to your package. The \"Visa Amendment\" is a flat processing fee charged when you need to modify an existing visa.",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=1049 toolUse=3532 candidates=158 thoughts=344 cached=0 totalTokenCount=5083 totalSum=5083 grounding=2 costUSD=0.001898 latencyMs=7742"
+    },
+    {
+      "corpus": "clean-md",
+      "caseId": "reg-visa-amend-conflation",
+      "alias": "Q17",
+      "run": 2,
+      "pass": true,
+      "detail": "ok",
+      "grounding": 2,
+      "refusal": false,
+      "answer": "\"Investor Visa Add-On\" = 1,000\n\"Visa Amendment\" = 2,000–4,000\n\nThe \"Investor Visa Add-On\" fee of 1,000 AED applies to the cost of obtaining an additional investor visa, while the \"Visa Amendment\" fee of 2,000–4,000 AED is a separate charge related to making changes to an existing visa.",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=848 toolUse=3333 candidates=167 thoughts=0 cached=0 totalTokenCount=4348 totalSum=4348 grounding=2 costUSD=0.001296 latencyMs=6723"
+    },
+    {
+      "corpus": "clean-md",
+      "caseId": "reg-visa-amend-conflation",
+      "alias": "Q17",
+      "run": 3,
+      "pass": true,
+      "detail": "ok",
+      "grounding": 2,
+      "refusal": false,
+      "answer": "\"Investor Visa Add-On\" = 1,000\n\"Visa Amendment\" = 2,000–4,000\n\nThe Investor Visa Add-On is a per-item fee applied to the addition of an investor visa, whereas the Visa Amendment fee is a processing cost associated with modifying an existing visa.",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=848 toolUse=3326 candidates=138 thoughts=0 cached=0 totalTokenCount=4312 totalSum=4312 grounding=2 costUSD=0.001251 latencyMs=6405"
+    },
+    {
+      "corpus": "clean-md",
+      "caseId": "reg-cross-biz-waiver",
+      "alias": "Q3",
+      "run": 1,
+      "pass": true,
+      "detail": "ok",
+      "grounding": 1,
+      "refusal": false,
+      "answer": "The Cross Business Activity Fee is waived for new applications.\n\nThe exact condition and effective amount are as follows:\n*   **Condition:** The fee is waived for new applications and the next three renewals (a total of 4 years).\n*   **Effective Amount:** When the waiver applies, the effective amount for a new application is 0.",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=837 toolUse=3898 candidates=136 thoughts=0 cached=0 totalTokenCount=4871 totalSum=4871 grounding=1 costUSD=0.001388 latencyMs=7003"
+    },
+    {
+      "corpus": "clean-md",
+      "caseId": "reg-cross-biz-waiver",
+      "alias": "Q3",
+      "run": 2,
+      "pass": true,
+      "detail": "ok",
+      "grounding": 1,
+      "refusal": false,
+      "answer": "The Cross Business Activity Fee is waived under the following condition:\n\n\"Cross Business Activity Fee is waived for new applications and the next three renewals (4 years).\"\n\nRegarding the effective amount for a new application:\n\n\"<Cross Business Activity Fee>\" = 2,000\n\nWhen the Cross Business Activity Fee is waived (for new applications and the next three renewals), the effective amount for a new application is 0.",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=837 toolUse=4205 candidates=150 thoughts=0 cached=0 totalTokenCount=5192 totalSum=5192 grounding=1 costUSD=0.001486 latencyMs=6552"
+    },
+    {
+      "corpus": "clean-md",
+      "caseId": "reg-cross-biz-waiver",
+      "alias": "Q3",
+      "run": 3,
+      "pass": true,
+      "detail": "ok",
+      "grounding": 1,
+      "refusal": false,
+      "answer": "Yes, the Cross Business Activity Fee is waived under specific conditions.\n\nAs per the provided documents:\n\n\"Cross Business Activity Fee\" = 2,000\n\nThe condition for this waiver is as follows: The Cross Business Activity Fee is waived for new applications and the next three renewals (a total of 4 years). Consequently, the effective amount for a new application is **0**.",
+      "costLine": "[cost-total] path=staff calls=expansion+answer prompt=837 toolUse=3910 candidates=143 thoughts=0 cached=0 totalTokenCount=4890 totalSum=4890 grounding=1 costUSD=0.001401 latencyMs=6652"
+    }
+  ]
+}
