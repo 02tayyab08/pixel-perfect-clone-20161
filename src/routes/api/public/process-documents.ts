@@ -140,35 +140,11 @@ async function processOne(row: ClaimedRow) {
         p_error: null,
       });
 
-      // Phase 1: best-effort retrieval self-probe (warn-only). Failures must
-      // not fail the document index — cron /api/public/probe-documents retries
-      // any ready doc still missing a probe row.
-      try {
-        const { runDocumentProbe, persistDocumentProbe } = await import(
-          "@/lib/document-probe.server"
-        );
-        const probeInput = {
-          documentId: row.id,
-          organizationId: row.organization_id,
-          fileName: row.file_name,
-          mimeType: row.mime_type,
-          sizeBytes: row.size_bytes ?? objSize,
-          storagePath: row.storage_path as string,
-          fileSearchStoreName: org.file_search_store_name ?? null,
-        };
-        const outcome = await runDocumentProbe(probeInput);
-        await persistDocumentProbe(probeInput, outcome);
-        console.log(
-          `[process-documents] probe doc=${row.id} class=${outcome.probeClass} ` +
-            `rate=${outcome.successRate ?? "n/a"}`,
-        );
-      } catch (probeErr) {
-        console.error(
-          "[process-documents] probe deferred to cron",
-          row.id,
-          probeErr instanceof Error ? probeErr.message : String(probeErr),
-        );
-      }
+      // Phase 1 inline probe TEMPORARILY DISABLED (2026-07-20 bisect):
+      // document-probe → document-text pulls mammoth/pdf-parse. Even lazy
+      // import from a route that still top-level-imports the probe module
+      // (probe-documents.ts) crashed Cloudflare workerd at boot and 500'd
+      // every route. Probe route removed from graph; reinstate later.
       return;
     } catch (e) {
       lastErr = e;

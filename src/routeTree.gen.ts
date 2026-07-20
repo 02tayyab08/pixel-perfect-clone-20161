@@ -23,7 +23,6 @@ import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.ap
 import { Route as ApiPublicWidgetQueryRouteImport } from './routes/api/public/widget-query'
 import { Route as ApiPublicWidgetHistoryRouteImport } from './routes/api/public/widget-history'
 import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
-import { Route as ApiPublicProbeDocumentsRouteImport } from './routes/api/public/probe-documents'
 import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
 import { Route as AuthenticatedAppSlugLeadsRouteImport } from './routes/_authenticated.app.$slug.leads'
 import { Route as AuthenticatedAppSlugDocumentsRouteImport } from './routes/_authenticated.app.$slug.documents'
@@ -99,11 +98,6 @@ const ApiPublicProcessDocumentsRoute =
     path: '/api/public/process-documents',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicProbeDocumentsRoute = ApiPublicProbeDocumentsRouteImport.update({
-  id: '/api/public/probe-documents',
-  path: '/api/public/probe-documents',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedAppSlugRoute = AuthenticatedAppSlugRouteImport.update({
   id: '/$slug',
   path: '/$slug',
@@ -140,7 +134,6 @@ export interface FileRoutesByFullPath {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
-  '/api/public/probe-documents': typeof ApiPublicProbeDocumentsRoute
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
@@ -160,7 +153,6 @@ export interface FileRoutesByTo {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
-  '/api/public/probe-documents': typeof ApiPublicProbeDocumentsRoute
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
@@ -182,7 +174,6 @@ export interface FileRoutesById {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/embed/$slug': typeof EmbedSlugRoute
   '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
-  '/api/public/probe-documents': typeof ApiPublicProbeDocumentsRoute
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
@@ -204,7 +195,6 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/embed/$slug'
     | '/app/$slug'
-    | '/api/public/probe-documents'
     | '/api/public/process-documents'
     | '/api/public/widget-history'
     | '/api/public/widget-query'
@@ -224,7 +214,6 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/embed/$slug'
     | '/app/$slug'
-    | '/api/public/probe-documents'
     | '/api/public/process-documents'
     | '/api/public/widget-history'
     | '/api/public/widget-query'
@@ -245,7 +234,6 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/embed/$slug'
     | '/_authenticated/app/$slug'
-    | '/api/public/probe-documents'
     | '/api/public/process-documents'
     | '/api/public/widget-history'
     | '/api/public/widget-query'
@@ -264,7 +252,6 @@ export interface RootRouteChildren {
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
   EmbedSlugRoute: typeof EmbedSlugRoute
-  ApiPublicProbeDocumentsRoute: typeof ApiPublicProbeDocumentsRoute
   ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
   ApiPublicWidgetHistoryRoute: typeof ApiPublicWidgetHistoryRoute
   ApiPublicWidgetQueryRoute: typeof ApiPublicWidgetQueryRoute
@@ -370,13 +357,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicProcessDocumentsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/probe-documents': {
-      id: '/api/public/probe-documents'
-      path: '/api/public/probe-documents'
-      fullPath: '/api/public/probe-documents'
-      preLoaderRoute: typeof ApiPublicProbeDocumentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated/app/$slug': {
       id: '/_authenticated/app/$slug'
       path: '/$slug'
@@ -458,7 +438,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
   EmbedSlugRoute: EmbedSlugRoute,
-  ApiPublicProbeDocumentsRoute: ApiPublicProbeDocumentsRoute,
   ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
   ApiPublicWidgetHistoryRoute: ApiPublicWidgetHistoryRoute,
   ApiPublicWidgetQueryRoute: ApiPublicWidgetQueryRoute,

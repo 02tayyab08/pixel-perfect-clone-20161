@@ -16,6 +16,7 @@
 - Gemini File Search: document deletion requires force:true (else 400 FAILED_PRECONDITION). documents.list page_size max is 20. chunkingConfig applies at ingestion only.
 - **`documents.file_search_document_name` must be read from operations `response.documentName` (NOT `response.name`); the store list pager returns `.page` (NOT `.documents`).** Both bugs silently produced null names and broken backfill, which manifested as phantom retrieval failures (falsely attributed to “dense PDF unretrievable”). Always persist `documentName ?? name`, and page lists via `page.page ?? page.documents`.
 - gemini-2.5-flash streams thought parts: keep thinkingConfig.includeThoughts=false AND the per-part thought filter in every generateContentStream consumer.
+- Route files are statically imported by `routeTree.gen.ts`, so any top-level import in a route file runs at Cloudflare worker BOOT. Node-only packages (mammoth, pdf-parse, anything using `require()` or Node built-ins) crash workerd at boot and 500 EVERY route, surfacing as a generic swallowed SSR error. Import such modules lazily inside the handler (`await import(...)`, cached in a module-level promise) — never at the top level of a route file. Localhost will not reproduce this: Vite dev runs Node, not workerd.
 
 ## Security invariants
 - Secrets are server-side only: GEMINI_API_KEY, IP_HASH_SALT, CRON_WEBHOOK_SECRET, SALNI_SUPABASE_SERVICE_ROLE_KEY must never reach the client bundle.
