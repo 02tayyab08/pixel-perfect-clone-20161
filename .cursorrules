@@ -28,7 +28,7 @@
 - record_query_usage(org) is called once per answered turn (staff and widget alike).
 
 ## Product constants — do not alter
-- Refusal string, exactly: "I don't have that in the provided documents."
+- Refusal strings differ by surface — staff /api/query uses the exact constant "I don't have that in the provided documents."; widget refuses conversationally per the persona while keeping identical grounding rules. Widget renders no citations to visitors but still persists them.
 - Throttle message: "We're experiencing high demand — please try again in a little while."
 - Unavailable message: "This assistant is currently unavailable."
 - Answer model LOCKED 2026-07-18: QUERY_MODEL=`gemini-3.1-flash-lite`, thinkingLevel=`MEDIUM` (staff + widget). Validated on 2 independent 20Q sets with zero fabrications. Do not change model/thinking to chase retrieval soft-fails — see `eval/DECISION_LOG.md`.

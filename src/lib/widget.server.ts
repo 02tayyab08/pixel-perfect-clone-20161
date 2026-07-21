@@ -197,8 +197,10 @@ export async function runWidgetGates(args: {
 }
 
 /**
- * Sentinel phrase from the widget consent template. Presence of this exact
- * substring in a prior assistant message means the model already asked once
- * this conversation and must not ask again unless the visitor volunteers.
+ * Sentinel phrases from the widget consent templates (EN / AR). Presence of
+ * either exact substring in a prior assistant message means the model already
+ * asked once this conversation and must not ask again unless the visitor
+ * volunteers.
  */
 export const CONSENT_SENTINEL = "By sharing it you agree that";
+export const CONSENT_SENTINEL_AR = "فإنك توافق على أن تحتفظ";

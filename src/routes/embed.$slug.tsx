@@ -3,19 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { getEmbedOrgBySlugFn } from "@/lib/widget.functions";
 import { AssistantMarkdown } from "@/components/assistant-markdown";
 import { useChatAutoscroll } from "@/hooks/use-chat-autoscroll";
-import {
-  buildCitationPresentation,
-  type CitationSource,
-  type GroundingChunkRow,
-  type GroundingSupportRow,
-} from "@/lib/citations";
 
 type Msg = {
   role: "user" | "assistant";
   content: string;
-  markedContent?: string;
   isRefusal?: boolean;
-  citations?: CitationSource[];
 };
 
 type OrgBranding = {
@@ -98,9 +90,6 @@ function EmbedPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [activeCite, setActiveCite] = useState<{ msgIdx: number; n: number } | null>(
-    null,
-  );
   const lastContent = messages[messages.length - 1]?.content ?? "";
   const { containerRef, bottomRef, lastUserRef, markUserSent, onScroll } =
     useChatAutoscroll(lastContent, busy);
@@ -213,8 +202,6 @@ function EmbedPage() {
     const dec = new TextDecoder();
     let buf = "";
     let acc = "";
-    let cits: CitationSource[] = [];
-    let markedContent: string | undefined;
     let isRefusal = false;
     while (true) {
       const { value, done } = await reader.read();
@@ -230,26 +217,15 @@ function EmbedPage() {
           if (obj.type === "conversation") setConversationId(obj.id);
           else if (obj.type === "delta") acc += obj.text;
           else if (obj.type === "override") acc = obj.text;
-          else if (obj.type === "citations") {
-            const chunks = (obj.chunks ?? []) as GroundingChunkRow[];
-            const supports = (obj.supports ?? []) as GroundingSupportRow[];
-            const plan = buildCitationPresentation(acc, chunks, supports);
-            cits = plan.sources;
-            markedContent = plan.markedMarkdown;
-          } else if (obj.type === "meta") {
-            isRefusal = !!obj.isRefusal;
-            if (isRefusal) {
-              cits = [];
-              markedContent = undefined;
-            }
-          } else if (obj.type === "error") acc = `⚠ ${obj.message}`;
+          else if (obj.type === "meta") isRefusal = !!obj.isRefusal;
+          else if (obj.type === "error") acc = `⚠ ${obj.message}`;
+          // Citations SSE is ignored on the widget — still persisted server-side
+          // for audit; visitors never see chips/source names.
           setMessages((m) => {
             const copy = [...m];
             copy[copy.length - 1] = {
               role: "assistant",
               content: acc,
-              markedContent: isRefusal ? undefined : markedContent,
-              citations: isRefusal ? [] : cits,
               isRefusal,
             };
             return copy;
@@ -336,11 +312,6 @@ function EmbedPage() {
             (i === messages.length - 1 ||
               (i === messages.length - 2 && messages[i + 1]?.role === "assistant"));
           const streamingThis = busy && i === messages.length - 1;
-          const showMarked =
-            m.role === "assistant" &&
-            !m.isRefusal &&
-            !streamingThis &&
-            !!m.markedContent;
           return (
             <div
               key={i}
@@ -359,50 +330,14 @@ function EmbedPage() {
               >
                 {m.role === "assistant" ? (
                   m.content ? (
-                    <AssistantMarkdown
-                      content={showMarked ? m.markedContent! : m.content}
-                      activeCite={
-                        activeCite?.msgIdx === i ? activeCite.n : null
-                      }
-                      onCiteClick={(n) => {
-                        setActiveCite({ msgIdx: i, n });
-                        requestAnimationFrame(() => {
-                          document
-                            .querySelector(`[data-cite-chip="${i}-${n}"]`)
-                            ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-                        });
-                      }}
-                    />
-                  ) : busy && i === messages.length - 1 ? (
+                    <AssistantMarkdown content={m.content} />
+                  ) : streamingThis ? (
                     "…"
                   ) : null
                 ) : (
                   m.content
                 )}
               </div>
-              {!m.isRefusal && m.citations && m.citations.length > 0 && !streamingThis ? (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {m.citations.map((c) => (
-                    <button
-                      key={c.n}
-                      type="button"
-                      data-cite-chip={`${i}-${c.n}`}
-                      onClick={() => setActiveCite({ msgIdx: i, n: c.n })}
-                      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
-                        activeCite?.msgIdx === i && activeCite.n === c.n
-                          ? "border-slate-400 bg-slate-100 text-slate-800"
-                          : "border-slate-200 bg-white text-slate-500"
-                      }`}
-                    >
-                      <span className="font-semibold text-slate-700">[{c.n}]</span>
-                      <span className="max-w-[10rem] truncate">
-                        {c.source_title ?? "source"}
-                      </span>
-                      {c.page ? <span>· p.{c.page}</span> : null}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
           );
         })}
