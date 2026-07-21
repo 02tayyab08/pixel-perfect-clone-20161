@@ -16,7 +16,7 @@ import { extractStreamUsage, logAnswerCost, logQuestionCostTotal } from "@/lib/c
 void isSetupInProgressPayload;
 
 const BodySchema = z.object({
-  orgId: z.string().uuid(),
+  slug: z.string().min(1).max(64),
   conversationId: z.string().uuid().nullish(),
   endUserRef: z.string().uuid(),
   locale: z.enum(["en", "ar"]).default("en"),
@@ -134,14 +134,14 @@ export const Route = createFileRoute("/api/public/widget-query")({
           .select(
             "id, name, is_active, system_instruction, file_search_store_name, allowed_domains, lead_capture_enabled",
           )
-          .eq("id", parsed.orgId)
+          .eq("slug", parsed.slug)
           .maybeSingle();
         if (orgErr || !org) return new Response("Not Found", { status: 404 });
 
         const leadCaptureEnabled = org.lead_capture_enabled !== false;
 
         console.log(
-          `[widget-query] gate inputs orgId=${parsed.orgId} endUserRef=${JSON.stringify(parsed.endUserRef)} ` +
+          `[widget-query] gate inputs orgId=${org.id} slug=${parsed.slug} endUserRef=${JSON.stringify(parsed.endUserRef)} ` +
             `origin=${JSON.stringify(request.headers.get("origin"))} ` +
             `allowedDomains=${JSON.stringify(org.allowed_domains)} ` +
             `is_active=${org.is_active}`,
@@ -149,7 +149,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
 
         // MANDATORY gates BEFORE any Gemini spend.
         const gate = await runWidgetGates({
-          orgId: parsed.orgId,
+          orgId: org.id,
           isActive: org.is_active !== false,
           allowedDomains: (org.allowed_domains as string[] | null) ?? null,
           originHeader: request.headers.get("origin"),
@@ -162,7 +162,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
           );
           return new Response(gate.message, { status: gate.status });
         }
-        console.log(`[widget-query] gate PASSED orgId=${parsed.orgId}`);
+        console.log(`[widget-query] gate PASSED orgId=${org.id}`);
 
         let storeName: string;
         try {
@@ -208,7 +208,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
           const { data: conv, error: convErr } = await svc
             .from("conversations")
             .insert({
-              organization_id: parsed.orgId,
+              organization_id: org.id,
               channel: "text",
               started_by: null,
               end_user_ref: parsed.endUserRef,
@@ -227,7 +227,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
         // Persist user message.
         await svc.from("messages").insert({
           conversation_id: conversationId,
-          organization_id: parsed.orgId,
+          organization_id: org.id,
           role: "user",
           modality: "text",
           content: parsed.message,
@@ -440,7 +440,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 .from("messages")
                 .insert({
                   conversation_id: conversationId,
-                  organization_id: parsed.orgId,
+                  organization_id: org.id,
                   role: "assistant",
                   modality: "text",
                   content: fullText,
@@ -464,7 +464,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 );
                 const dbRows = plan.sources.map((s) => ({
                   message_id: msgRow.id,
-                  organization_id: parsed.orgId,
+                  organization_id: org.id,
                   document_id: s.document_id,
                   source_title: s.source_title ?? "Untitled source",
                   snippet: s.snippet,
@@ -481,7 +481,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
               }
 
               // Per-answered-turn usage record.
-              await svc.rpc("record_query_usage", { p_org: parsed.orgId });
+              await svc.rpc("record_query_usage", { p_org: org.id });
 
               // Lead capture — only when enabled and after refusal guard cleared it.
               if (leadCaptureEnabled && capturedCall && !alreadyHasLead) {
@@ -499,7 +499,7 @@ export const Route = createFileRoute("/api/public/widget-query")({
                 if ((email || phone) && consentText.length > 0) {
                   const ip = extractIp(request.headers) || null;
                   const params = {
-                    p_org: parsed.orgId,
+                    p_org: org.id,
                     p_conversation: conversationId,
                     p_full_name: (args.full_name ?? "").trim() || null,
                     p_email: email,

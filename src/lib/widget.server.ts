@@ -75,11 +75,17 @@ export async function runWidgetGates(args: {
   originHeader: string | null;
   endUserRef: string;
   ip: string;
+  /**
+   * History reads: skip ref rate + org hourly (Gemini spend gates).
+   * Still runs is_active → Origin → IP rate, in that order.
+   */
+  skipRefAndHourly?: boolean;
 }): Promise<GateResult> {
   console.log(
     `[widget-gates] start orgId=${args.orgId} endUserRef=${JSON.stringify(args.endUserRef)} ` +
       `endUserRefType=${typeof args.endUserRef} origin=${JSON.stringify(args.originHeader)} ` +
-      `allowedDomains=${JSON.stringify(args.allowedDomains)} ip=${JSON.stringify(args.ip)}`,
+      `allowedDomains=${JSON.stringify(args.allowedDomains)} ip=${JSON.stringify(args.ip)} ` +
+      `skipRefAndHourly=${args.skipRefAndHourly === true}`,
   );
 
   // 1. is_active
@@ -111,59 +117,61 @@ export async function runWidgetGates(args: {
 
   const svc = salniService();
 
-  // 3. check_rate_limit(ref)
-  const refSubject = `ref:${args.endUserRef}`;
-  const { data: refOk, error: refErr } = await svc.rpc("check_rate_limit", {
-    p_org: args.orgId,
-    p_subject: refSubject,
-    p_limit: 20,
-  });
-  if (refErr) {
-    console.error(
-      `[widget-gates] check_rate_limit(ref) RPC_ERROR subject=${refSubject} limit=20 ` +
-        `err=${refErr.message} code=${(refErr as { code?: string }).code ?? ""} ` +
-        `hint=${(refErr as { hint?: string }).hint ?? ""}`,
+  if (!args.skipRefAndHourly) {
+    // 3. check_rate_limit(ref)
+    const refSubject = `ref:${args.endUserRef}`;
+    const { data: refOk, error: refErr } = await svc.rpc("check_rate_limit", {
+      p_org: args.orgId,
+      p_subject: refSubject,
+      p_limit: 20,
+    });
+    if (refErr) {
+      console.error(
+        `[widget-gates] check_rate_limit(ref) RPC_ERROR subject=${refSubject} limit=20 ` +
+          `err=${refErr.message} code=${(refErr as { code?: string }).code ?? ""} ` +
+          `hint=${(refErr as { hint?: string }).hint ?? ""}`,
+      );
+      return {
+        ok: false,
+        reason: "rpc_error",
+        status: 500,
+        message: `Rate-limit check failed (ref): ${refErr.message}`,
+      };
+    }
+    console.log(
+      `[widget-gates] check_rate_limit(ref) subject=${refSubject} limit=20 result=${JSON.stringify(refOk)} ok=${refOk !== false}`,
     );
-    return {
-      ok: false,
-      reason: "rpc_error",
-      status: 500,
-      message: `Rate-limit check failed (ref): ${refErr.message}`,
-    };
-  }
-  console.log(
-    `[widget-gates] check_rate_limit(ref) subject=${refSubject} limit=20 result=${JSON.stringify(refOk)} ok=${refOk !== false}`,
-  );
-  if (refOk === false) {
-    return { ok: false, reason: "ref_rate", status: 429, message: THROTTLE_MSG };
+    if (refOk === false) {
+      return { ok: false, reason: "ref_rate", status: 429, message: THROTTLE_MSG };
+    }
+
+    // 4. check_org_hourly_ceiling
+    const { data: orgOk, error: orgErr } = await svc.rpc("check_org_hourly_ceiling", {
+      p_org: args.orgId,
+      p_limit: 300,
+    });
+    if (orgErr) {
+      console.error(
+        `[widget-gates] check_org_hourly_ceiling RPC_ERROR orgId=${args.orgId} limit=300 ` +
+          `err=${orgErr.message} code=${(orgErr as { code?: string }).code ?? ""} ` +
+          `hint=${(orgErr as { hint?: string }).hint ?? ""}`,
+      );
+      return {
+        ok: false,
+        reason: "rpc_error",
+        status: 500,
+        message: `Hourly ceiling check failed: ${orgErr.message}`,
+      };
+    }
+    console.log(
+      `[widget-gates] check_org_hourly_ceiling orgId=${args.orgId} limit=300 result=${JSON.stringify(orgOk)} ok=${orgOk !== false}`,
+    );
+    if (orgOk === false) {
+      return { ok: false, reason: "org_hourly", status: 429, message: THROTTLE_MSG };
+    }
   }
 
-  // 4. check_org_hourly_ceiling
-  const { data: orgOk, error: orgErr } = await svc.rpc("check_org_hourly_ceiling", {
-    p_org: args.orgId,
-    p_limit: 300,
-  });
-  if (orgErr) {
-    console.error(
-      `[widget-gates] check_org_hourly_ceiling RPC_ERROR orgId=${args.orgId} limit=300 ` +
-        `err=${orgErr.message} code=${(orgErr as { code?: string }).code ?? ""} ` +
-        `hint=${(orgErr as { hint?: string }).hint ?? ""}`,
-    );
-    return {
-      ok: false,
-      reason: "rpc_error",
-      status: 500,
-      message: `Hourly ceiling check failed: ${orgErr.message}`,
-    };
-  }
-  console.log(
-    `[widget-gates] check_org_hourly_ceiling orgId=${args.orgId} limit=300 result=${JSON.stringify(orgOk)} ok=${orgOk !== false}`,
-  );
-  if (orgOk === false) {
-    return { ok: false, reason: "org_hourly", status: 429, message: THROTTLE_MSG };
-  }
-
-  // 5. check_rate_limit(ip)
+  // 5. check_rate_limit(ip) — always (query spend path step 5; history final gate)
   const salt = process.env.IP_HASH_SALT ?? "";
   const ipHash = args.ip ? await sha256Hex(args.ip + salt) : "unknown";
   const ipSubject = `ip:${ipHash}`;
