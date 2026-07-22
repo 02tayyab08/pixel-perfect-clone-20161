@@ -1,7 +1,7 @@
 # PROJECT_HANDOFF.md — Salni
 
 **Handoff written:** 2026-07-20 (end of a long working session)
-**Updated:** 2026-07-21 — production outage **RESOLVED** (see Section 2). Part 2 §8.0 and BRANCH STATE updated same day.
+**Updated:** 2026-07-22 — fold in post-outage hardening, IFZA corpus confirmation, genai 2.11.0 sync, open next-session threads. Outage still **RESOLVED** (see Section 2 / Part 2 §8.0).
 
 ---
 
@@ -41,8 +41,8 @@ Per the project brief (`00_PRODUCT_BRIEF`): **one real Dubai business live on th
 | Runtime | Cloudflare Workers (workerd) |
 | Database | External Supabase (Mumbai region) |
 | RAG | Google Gemini **File Search** (managed RAG) |
-| Gemini SDK | `@google/genai` — **`2.10.0` in `bun.lock`**, **`2.11.0` in `package-lock.json`**. Lovable builds with **bun**, so **production runs 2.10.0**. Unresolved pending lockfile reconcile (see §7). Called directly with `GEMINI_API_KEY`. |
-| Package managers | **Both** `bun.lock` (Lovable builds with bun) and `package-lock.json` (Cursor installs with npm) — this is a known hazard, see Section 7 |
+| Gemini SDK | `@google/genai` — **`2.11.0` in `bun.lock`** (synced `5dc2837`; 2.10.0's stream parser failed on multi-chunk grounded responses). `package-lock.json` may still drift on other packages — dual-lockfile hazard remains (see §7 / Part 2). Lovable builds with **bun**. Called directly with `GEMINI_API_KEY`. |
+| Package managers | **Both** `bun.lock` (Lovable builds with bun — **source of truth for deploys**) and `package-lock.json` (Cursor historically used npm). Standardize on **bun add / bun install**. Drift is otherwise still unreconciled. |
 
 ### Tenant isolation model (security-critical)
 
@@ -56,7 +56,7 @@ Per the project brief (`00_PRODUCT_BRIEF`): **one real Dubai business live on th
 
 ## 2. CURRENT STATUS
 
-### ✅ PRODUCTION OUTAGE RESOLVED (2026-07-21)
+### ✅ PRODUCTION OUTAGE RESOLVED AND CONFIRMED (2026-07-21)
 
 **Symptom (2026-07-20):** every route returned HTTP 500, including `GET /`. Lovable logs showed only a generic swallowed h3 `HTTPError` with no stack trace or module name.
 
@@ -70,32 +70,33 @@ probe-documents.ts → @/lib/document-probe.server → @/lib/document-text.serve
 
 **Evidence:** the only delta between the last broken deploy (`c6dfbf4`) and the working one is **`ad75380`** (`bisect: remove probe-documents route from worker graph`), which removed the probe route from the worker graph. Production recovered after that commit deployed.
 
-**Follow-up (permanent removal):** commit **`4eeaf86`** deleted the probe source files (`probe-documents.ts`, `document-probe.server.ts`, `document-text.server.ts`) and removed the `mammoth` / `pdf-parse` / `@types/pdf-parse` dependencies entirely. Standing decision: the Phase 1 probe is **not** coming back in its current form (full outage + non-discriminative calibration). The explanatory comment block in `process-documents.ts` (L143–147) is retained as historical documentation.
+**Permanent removal (confirmed):** commit **`4eeaf86`** deleted the probe source files (`probe-documents.ts`, `document-probe.server.ts`, `document-text.server.ts`) and removed the `mammoth` / `pdf-parse` / `@types/pdf-parse` dependencies entirely. Standing decision: the Phase 1 probe is **not** coming back in its current form (full outage + non-discriminative calibration). The explanatory comment block in `process-documents.ts` (L143–147) is retained as historical documentation.
 
 **Note — the lazy `probeModulePromise` fix never landed as a commit.** An earlier narrative that the top-level probe import was replaced with a lazy `await import(...)` cached in a module-level promise is incorrect for this repo's history; that change was never committed. Recovery was the graph removal (`ad75380`), then full deletion (`4eeaf86`).
 
-**Note — theories cleared by the recovery:** production runs fine on **`@google/genai` 2.10.0** (bun lock) with bare `"crypto"` imports and the `Buffer` global still on the boot graph. That clears both the SDK-skew theory and the `nodejs_compat` theory as explanations for the 2026-07-20 outage.
+**Note — theories cleared for the outage:** the outage was **not** caused by `@google/genai` version skew or missing `nodejs_compat` — production recovered on the then-current bun lock (2.10.0) with bare `"crypto"` and `Buffer` still on the boot graph. Separately, bun later synced to **2.11.0** (`5dc2837`) because 2.10.0's stream parser fails on multi-chunk grounded responses (a different defect; see Part 2 §7).
 
-### What is working and verified (before the outage)
+### What is working and verified (post-recovery)
 
-Everything below was verified on localhost and, prior to the outage, in production:
+Verified on localhost and in production after the outage fix:
 
-- **Accuracy:** 19/20 on the deployed SSE path, 18/20 on a direct Gemini mirror, **zero fabrications** across ~40 eval questions on two independent sets.
+- **Accuracy:** 19/20 on the deployed SSE path, 18/20 on a direct Gemini mirror, **zero fabrications** across ~40 eval questions on two independent sets (pre-outage baseline; re-verify after corpus/path changes).
 - **Cost:** ~**$0.0012 per question** (`gemini-3.1-flash-lite`, thinkingLevel MEDIUM), down from ~$0.032 at session start.
-- **Citations:** Stage 1 deterministic highlighting complete. Live retest: 13/13 citations produced spans, 12 via Tier 1, zero boilerplate-wrong highlights.
+- **Citations (staff):** Stage 1 deterministic highlighting. On **markdown-sourced** chunks, full-row / waiver-sentence highlights work as designed (screenshots confirm). Earlier "sparse highlighting" against IFZA was the **flattened PDF corpus**, not a highlighter defect — see corpus note below and Part 2 §6.7.
 - **UI:** markdown rendering (react-markdown + remark-gfm), autoscroll pinning the user message near the top, click-to-side-panel citations with multi-`<mark>` highlighting.
-- **Widget:** `/embed/:slug` loads, greets correctly, answers grounded questions, gate chain runs before any Gemini call.
+- **Widget:** `/embed/:slug` loads; public endpoints hardened (`26254e1`) — history gated + POST; both endpoints take `slug` not client `orgId`. Staff path still works with `fileSearch` alone.
 
 ### Repo / deployment state
 
 | Item | Value |
 |---|---|
 | Repo | `02tayyab08/pixel-perfect-clone-20161` (GitHub) |
-| Latest commit pushed | `8a9bc93` (25 files — citation Stage 1) |
-| Earlier commits this session | `06f5700` (documentName fix), `17d9cbb`, `ce91c4f` (duplicate ThinkingLevel import), `afb9713` (model-aware cost rates), `d1e260b` (merge with Lovable's 14 commits) |
-| Working tree | clean, up to date with `origin/main` at time of handoff |
+| Latest commit on `main` (at this update) | `5dc2837` (`@google/genai` 2.11.0 bun sync) |
+| Notable recent `main` | `26254e1` (public widget hardening), `4eeaf86` / `ad75380` (outage), `c6dfbf4` (react-markdown bun.lock), `8a9bc93` (citation Stage 1) |
+| Side branch | `widget-persona-wip` @ `84eb79e` — pushed, **NOT merged, NOT deployed** (see Part 2 BRANCH STATE) |
+| Working tree | docs update pending commit; code on `main` matches `origin/main` at handoff update |
 | Production URL | `https://pixel-perfect-clone-20161.lovable.app` |
-| Local dev | `npm run dev` — has run on ports 8080, 8083, 8084, 8085 during the session |
+| Local dev | Prefer `bun` for deps; `npm run dev` / Vite for the app |
 | GitHub write access | `02tayyab08` owns it; `tayyab-recoupr` was granted collaborator access mid-session |
 
 ### Test organization
@@ -110,19 +111,19 @@ Everything below was verified on localhost and, prior to the outage, in producti
 | Staff chat URL | `/app/recoupr-3/chat` |
 | Widget URL | `/embed/recoupr-3` |
 
-A second org exists: **`recoupr-document`**, `org_id` `1ef8c7d6-…` (truncated in conversation). It holds a copy of the original IFZA PDF. Verified **not** leaking into `recoupr-3` results — tenant isolation confirmed working.
+A second org exists: **`recoupr-document`**, `org_id` `1ef8c7d6-…` (truncated in conversation). It held a copy of the original IFZA PDF for isolation tests. Verified **not** leaking into `recoupr-3` results — tenant isolation confirmed working.
 
-### Indexed corpus (as of handoff)
+### Indexed corpus (confirmed 2026-07-22)
 
-Exactly **3 documents** for `recoupr-3`:
+Exactly **3 documents** for `recoupr-3` (XOR: clean IFZA markdown, not the PDF):
 
-1. `IFZA_Complete_Schedule_of_Fees_2024.md` — the hand-cleaned lossless markdown (see Section 6)
+1. `IFZA_Complete_Schedule_of_Fees_2024.md` — hand-cleaned lossless markdown. **CONFIRMED serving** (old flattened PDF deleted from this org's store).
 2. `Meydan free zone License Details.docx`
 3. `meydan freezone activity list.pdf`
 
-All three have non-null `file_search_document_name`. No orphans in the Gemini store. The original `Ifza - Licesen cost - Shedule off charges (1).pdf` was deleted from `recoupr-3`.
+All three should have non-null `file_search_document_name`. The original `Ifza - Licesen cost - Shedule off charges (1).pdf` was deleted from `recoupr-3`.
 
-[UNCERTAIN] The very last confirmed corpus state in conversation was the clean `.md` indexed and the PDF deleted, but a temporary swap back to the PDF happened during a head-to-head test and was described as "restored." Verify the actual store contents before trusting any eval numbers.
+**Citation implication:** sparse / minimal marks in the staff side panel were observed when retrieval returned **flattened PDF** chunks. With the clean markdown live, Stage 1 lights full table rows / waiver sentences as designed. Treat residual sparse cases on PDF-shaped chunks as expected (Tier 1 length gate + Tier 2 label-only), not as a regression in `computeHighlights`.
 
 ---
 
@@ -232,7 +233,19 @@ These two typos manufactured months of apparent "retrieval failures."
 - Anonymous widget traffic reaches data **only** through service-role server functions. No Supabase client in widget browser code. **No Realtime in the widget** (anonymous users have no RLS grants; a widget Realtime subscription silently fails).
 - The staff path `/api/query` must **NEVER** declare the `capture_lead` tool.
 - The File Search `metadataFilter` org id is resolved **server-side** from the slug/membership. Never trust a client-supplied org id for retrieval scoping.
+- Any `/api/public/*` endpoint using the service role **must** resolve the organization server-side (from **slug** or verified membership — never from a client-supplied `orgId`) and run the appropriate gate chain before reading tenant data. Secrets belong in **POST bodies**, never query strings.
 - Never use the service role for user-facing reads (e.g. "which orgs does this user belong to") — those must run as the authenticated user so RLS applies.
+
+### Public widget endpoints (hardened `26254e1`)
+
+| Endpoint | Method | Client body | Gates before work |
+|---|---|---|---|
+| `/api/public/widget-query` | POST | `slug`, `endUserRef`, message, … | Full five-step chain (below) before any Gemini call |
+| `/api/public/widget-history` | **POST** (was GET) | `slug`, `endUserRef` | `is_active` → Origin vs `allowed_domains` → IP rate only (`runWidgetGates({ skipRefAndHourly: true })`). Then conversation/message read. |
+
+Both look up `organizations` with `.eq("slug", …)`. All `organization_id`, `p_org`, and `metadataFilter` values use the **resolved** `org.id`.
+
+**Accepted residuals:** `org.id` still reaches the browser via the embed loader and localStorage keys `salni.eur.${org.id}` / `salni.locale.${org.id}` (renaming orphans existing visitors — deliberately unchanged). Slug-based public endpoints are enumerable by design. **Deferred:** HMAC/cookie binding of `endUserRef` to the org (not built).
 
 ### The widget gate chain (must run BEFORE any Gemini call, in this order)
 
@@ -243,6 +256,8 @@ These two typos manufactured months of apparent "retrieval failures."
 5. `check_rate_limit(org, 'ip:' + sha256(ip + IP_HASH_SALT), 120)`
 
 Any limiter returning **false** → throttle message, **zero Gemini spend**. Any limiter **throwing** → a real error; surface it, never disguise an RPC error as a throttle. `record_query_usage(org)` is called once per answered turn (staff and widget alike).
+
+History skips steps 3–4 only (`skipRefAndHourly`); it still must not read conversations until its gates pass.
 
 ### Product constants (exact strings — do not alter)
 
@@ -269,7 +284,7 @@ Any limiter returning **false** → throttle message, **zero Gemini spend**. Any
 
 ### Error handling
 
-Never swallow errors into generic messages. Surface code + message. Masked errors repeatedly hid real bugs this session: a loader mapping every Supabase error to `notFound()` (produced a phantom 404), a silently failing audit insert, a throttle message covering RPC failures, and the current production outage's generic `HTTPError`.
+Never swallow errors into generic messages. Surface code + message. Masked errors repeatedly hid real bugs this session: a loader mapping every Supabase error to `notFound()` (produced a phantom 404), a silently failing audit insert, a throttle message covering RPC failures, and the 2026-07-20 production outage's generic `HTTPError` (resolved — see Section 2).
 
 ### White-label constraint
 
