@@ -120,11 +120,7 @@ function EmbedPage() {
     const savedLocale = localStorage.getItem(`salni.locale.${org.id}`);
     if (savedLocale === "en" || savedLocale === "ar") setLocale(savedLocale);
 
-    fetch("/api/public/widget-history", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug: org.slug, endUserRef: ref }),
-    })
+    fetch(`/api/public/widget-history?orgId=${org.id}&endUserRef=${ref}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
@@ -141,7 +137,7 @@ function EmbedPage() {
         }
       })
       .catch(() => undefined);
-  }, [org.id, org.slug, inactive, loadError]);
+  }, [org.id, inactive, loadError]);
 
   useEffect(() => {
     if (org.id) localStorage.setItem(`salni.locale.${org.id}`, locale);
@@ -182,7 +178,7 @@ function EmbedPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          slug: org.slug,
+          orgId: org.id,
           conversationId: conversationId ?? null,
           endUserRef,
           locale,
