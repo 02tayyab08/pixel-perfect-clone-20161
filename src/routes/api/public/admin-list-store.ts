@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/public/admin-list-store")({
         let pagerErr: string | null = null;
         let firstPageLength = -1;
         try {
-          const pager = await ai.documents.list({ parent: STORE_NAME });
+          const pager = await ai.fileSearchStores.documents.list({ parent: STORE_NAME });
           firstPageLength = pager.pageLength;
           for await (const doc of pager) {
             const d = doc as {
