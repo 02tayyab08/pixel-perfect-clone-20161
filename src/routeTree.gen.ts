@@ -23,6 +23,7 @@ import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.ap
 import { Route as ApiPublicWidgetQueryRouteImport } from './routes/api/public/widget-query'
 import { Route as ApiPublicWidgetHistoryRouteImport } from './routes/api/public/widget-history'
 import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
+import { Route as ApiPublicAdminListStoreRouteImport } from './routes/api/public/admin-list-store'
 import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
 import { Route as AuthenticatedAppSlugLeadsRouteImport } from './routes/_authenticated.app.$slug.leads'
 import { Route as AuthenticatedAppSlugDocumentsRouteImport } from './routes/_authenticated.app.$slug.documents'
@@ -98,6 +99,11 @@ const ApiPublicProcessDocumentsRoute =
     path: '/api/public/process-documents',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicAdminListStoreRoute = ApiPublicAdminListStoreRouteImport.update({
+  id: '/api/public/admin-list-store',
+  path: '/api/public/admin-list-store',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAppSlugRoute = AuthenticatedAppSlugRouteImport.update({
   id: '/$slug',
   path: '/$slug',
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
+  '/api/public/admin-list-store': typeof ApiPublicAdminListStoreRoute
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
@@ -153,6 +160,7 @@ export interface FileRoutesByTo {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
+  '/api/public/admin-list-store': typeof ApiPublicAdminListStoreRoute
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
@@ -174,6 +182,7 @@ export interface FileRoutesById {
   '/auth/sign-up': typeof AuthSignUpRoute
   '/embed/$slug': typeof EmbedSlugRoute
   '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
+  '/api/public/admin-list-store': typeof ApiPublicAdminListStoreRoute
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/embed/$slug'
     | '/app/$slug'
+    | '/api/public/admin-list-store'
     | '/api/public/process-documents'
     | '/api/public/widget-history'
     | '/api/public/widget-query'
@@ -214,6 +224,7 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/embed/$slug'
     | '/app/$slug'
+    | '/api/public/admin-list-store'
     | '/api/public/process-documents'
     | '/api/public/widget-history'
     | '/api/public/widget-query'
@@ -234,6 +245,7 @@ export interface FileRouteTypes {
     | '/auth/sign-up'
     | '/embed/$slug'
     | '/_authenticated/app/$slug'
+    | '/api/public/admin-list-store'
     | '/api/public/process-documents'
     | '/api/public/widget-history'
     | '/api/public/widget-query'
@@ -252,6 +264,7 @@ export interface RootRouteChildren {
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
   EmbedSlugRoute: typeof EmbedSlugRoute
+  ApiPublicAdminListStoreRoute: typeof ApiPublicAdminListStoreRoute
   ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
   ApiPublicWidgetHistoryRoute: typeof ApiPublicWidgetHistoryRoute
   ApiPublicWidgetQueryRoute: typeof ApiPublicWidgetQueryRoute
@@ -357,6 +370,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicProcessDocumentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/admin-list-store': {
+      id: '/api/public/admin-list-store'
+      path: '/api/public/admin-list-store'
+      fullPath: '/api/public/admin-list-store'
+      preLoaderRoute: typeof ApiPublicAdminListStoreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/app/$slug': {
       id: '/_authenticated/app/$slug'
       path: '/$slug'
@@ -438,6 +458,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
   EmbedSlugRoute: EmbedSlugRoute,
+  ApiPublicAdminListStoreRoute: ApiPublicAdminListStoreRoute,
   ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
   ApiPublicWidgetHistoryRoute: ApiPublicWidgetHistoryRoute,
   ApiPublicWidgetQueryRoute: ApiPublicWidgetQueryRoute,
@@ -445,13 +466,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
