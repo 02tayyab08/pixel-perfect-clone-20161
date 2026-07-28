@@ -22,6 +22,7 @@ import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated.app'
 import { Route as ApiPublicWidgetQueryRouteImport } from './routes/api/public/widget-query'
 import { Route as ApiPublicWidgetHistoryRouteImport } from './routes/api/public/widget-history'
+import { Route as ApiPublicStoreEnumRouteImport } from './routes/api/public/store-enum'
 import { Route as ApiPublicProcessDocumentsRouteImport } from './routes/api/public/process-documents'
 import { Route as AuthenticatedAppSlugRouteImport } from './routes/_authenticated.app.$slug'
 import { Route as AuthenticatedAppSlugLeadsRouteImport } from './routes/_authenticated.app.$slug.leads'
@@ -92,6 +93,11 @@ const ApiPublicWidgetHistoryRoute = ApiPublicWidgetHistoryRouteImport.update({
   path: '/api/public/widget-history',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicStoreEnumRoute = ApiPublicStoreEnumRouteImport.update({
+  id: '/api/public/store-enum',
+  path: '/api/public/store-enum',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicProcessDocumentsRoute =
   ApiPublicProcessDocumentsRouteImport.update({
     id: '/api/public/process-documents',
@@ -135,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/api/public/store-enum': typeof ApiPublicStoreEnumRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
@@ -154,6 +161,7 @@ export interface FileRoutesByTo {
   '/embed/$slug': typeof EmbedSlugRoute
   '/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/api/public/store-enum': typeof ApiPublicStoreEnumRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
@@ -175,6 +183,7 @@ export interface FileRoutesById {
   '/embed/$slug': typeof EmbedSlugRoute
   '/_authenticated/app/$slug': typeof AuthenticatedAppSlugRouteWithChildren
   '/api/public/process-documents': typeof ApiPublicProcessDocumentsRoute
+  '/api/public/store-enum': typeof ApiPublicStoreEnumRoute
   '/api/public/widget-history': typeof ApiPublicWidgetHistoryRoute
   '/api/public/widget-query': typeof ApiPublicWidgetQueryRoute
   '/_authenticated/app/$slug/chat': typeof AuthenticatedAppSlugChatRoute
@@ -196,6 +205,7 @@ export interface FileRouteTypes {
     | '/embed/$slug'
     | '/app/$slug'
     | '/api/public/process-documents'
+    | '/api/public/store-enum'
     | '/api/public/widget-history'
     | '/api/public/widget-query'
     | '/app/$slug/chat'
@@ -215,6 +225,7 @@ export interface FileRouteTypes {
     | '/embed/$slug'
     | '/app/$slug'
     | '/api/public/process-documents'
+    | '/api/public/store-enum'
     | '/api/public/widget-history'
     | '/api/public/widget-query'
     | '/app/$slug/chat'
@@ -235,6 +246,7 @@ export interface FileRouteTypes {
     | '/embed/$slug'
     | '/_authenticated/app/$slug'
     | '/api/public/process-documents'
+    | '/api/public/store-enum'
     | '/api/public/widget-history'
     | '/api/public/widget-query'
     | '/_authenticated/app/$slug/chat'
@@ -253,6 +265,7 @@ export interface RootRouteChildren {
   AuthSignUpRoute: typeof AuthSignUpRoute
   EmbedSlugRoute: typeof EmbedSlugRoute
   ApiPublicProcessDocumentsRoute: typeof ApiPublicProcessDocumentsRoute
+  ApiPublicStoreEnumRoute: typeof ApiPublicStoreEnumRoute
   ApiPublicWidgetHistoryRoute: typeof ApiPublicWidgetHistoryRoute
   ApiPublicWidgetQueryRoute: typeof ApiPublicWidgetQueryRoute
 }
@@ -350,6 +363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWidgetHistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/store-enum': {
+      id: '/api/public/store-enum'
+      path: '/api/public/store-enum'
+      fullPath: '/api/public/store-enum'
+      preLoaderRoute: typeof ApiPublicStoreEnumRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/process-documents': {
       id: '/api/public/process-documents'
       path: '/api/public/process-documents'
@@ -439,19 +459,10 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignUpRoute: AuthSignUpRoute,
   EmbedSlugRoute: EmbedSlugRoute,
   ApiPublicProcessDocumentsRoute: ApiPublicProcessDocumentsRoute,
+  ApiPublicStoreEnumRoute: ApiPublicStoreEnumRoute,
   ApiPublicWidgetHistoryRoute: ApiPublicWidgetHistoryRoute,
   ApiPublicWidgetQueryRoute: ApiPublicWidgetQueryRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
