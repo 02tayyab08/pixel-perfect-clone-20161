@@ -758,3 +758,53 @@ export const backfillFileSearchNamesFn = createServerFn({ method: "POST" })
       failures,
     };
   });
+
+const SaveMasterSchema = z.object({
+  documentId: z.string().uuid(),
+  orgId: z.string().uuid(),
+  masterMd: z.string().max(MAX_BYTES),
+});
+
+/**
+ * Phase 2b: save an editable master and trigger re-ingest in one write.
+ * Setting master_md + status='queued' together is the entire "publish"
+ * step — process-documents' worker branch picks up master_md on its next
+ * run, sweeps the old store copy, and uploads the master text instead of
+ * the original binary. No Gemini/Storage call happens here; this only
+ * writes the row and lets the existing worker do the rest.
+ */
+export const saveMasterAndRequeueFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => SaveMasterSchema.parse(input))
+  .handler(async ({ data }) => {
+    const user = await requireCurrentUser();
+    await assertOrgMember(user.accessToken, data.orgId);
+
+    const svc = salniService();
+
+    // Verify the row belongs to the org the caller claimed — belt-and-
+    // suspenders on top of assertOrgMember, matching deleteDocumentFn.
+    const read = await svc
+      .from("documents")
+      .select("id, organization_id")
+      .eq("id", data.documentId)
+      .maybeSingle();
+    if (read.error) {
+      return { ok: false as const, error: `documents.select failed: ${read.error.message}` };
+    }
+    if (!read.data) {
+      return { ok: false as const, error: "Document not found" };
+    }
+    if (read.data.organization_id !== data.orgId) {
+      return { ok: false as const, error: "Forbidden" };
+    }
+
+    const { error } = await svc
+      .from("documents")
+      .update({ master_md: data.masterMd, status: "queued" })
+      .eq("id", data.documentId);
+    if (error) {
+      return { ok: false as const, error: `documents.update failed: ${error.message}` };
+    }
+
+    return { ok: true as const };
+  });
