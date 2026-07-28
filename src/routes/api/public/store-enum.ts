@@ -13,6 +13,7 @@ export const Route = createFileRoute("/api/public/store-enum")({
   server: {
     handlers: {
       GET: async () => {
+        try {
         const ai = gemini();
         const out: Doc[] = [];
         let pageToken: string | undefined = undefined;
@@ -49,6 +50,10 @@ export const Route = createFileRoute("/api/public/store-enum")({
           grouped,
           raw: out,
         });
+        } catch (e) {
+          const err = e as { message?: string; stack?: string; status?: number };
+          return Response.json({ error: err.message ?? String(e), status: err.status, stack: err.stack }, { status: 500 });
+        }
       },
     },
   },
