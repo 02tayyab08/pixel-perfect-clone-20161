@@ -160,6 +160,7 @@ create table public.documents (
   mime_type                 text,
   size_bytes                bigint check (size_bytes is null or (size_bytes > 0 and size_bytes <= 52428800)),  -- 50 MB (R4; bucket enforces the same)
   storage_path              text,                          -- private bucket 'documents'; path = <org_id>/<document_id>/<file_name>
+  master_md                 text,                          -- Phase 2b: optional text override; when non-null/non-empty, worker uploads THIS text instead of the storage_path binary
   file_search_document_name text,                          -- resource name inside the File Search store
   status                    doc_status not null default 'queued',
   language                  app_locale,
