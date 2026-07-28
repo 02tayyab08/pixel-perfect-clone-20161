@@ -21,7 +21,7 @@ export const Route = createFileRoute("/api/public/store-enum")({
         do {
           const page = (await ai.fileSearchStores.documents.list({
             parent: STORE,
-            config: { pageSize: 50, pageToken },
+            config: { pageSize: 20, pageToken },
           } as never)) as {
             documents?: Doc[];
             page?: Doc[];
