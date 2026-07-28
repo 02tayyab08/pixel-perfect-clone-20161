@@ -21,6 +21,7 @@ type ClaimedRow = {
   mime_type: string | null;
   size_bytes: number | null;
   storage_path: string;
+  master_md: string | null;
 };
 
 type FileSearchListDoc = {
@@ -84,34 +85,48 @@ async function sweepStoreCopiesForDocument(
 async function processOne(row: ClaimedRow) {
   const svc = salniService();
 
-  // Re-check the Storage object's size / existence from Storage metadata.
-  const listPath = row.storage_path.split("/").slice(0, -1).join("/");
-  const fileNameOnly = row.storage_path.split("/").slice(-1)[0];
-  const { data: objects, error: listErr } = await svc.storage
-    .from(BUCKET)
-    .list(listPath, { search: fileNameOnly, limit: 1 });
-  const meta = objects?.[0];
-  const objSize = (meta?.metadata as { size?: number } | undefined)?.size;
-  if (listErr || !meta || typeof objSize !== "number" || objSize > MAX_BYTES) {
-    await svc.rpc("update_document_status", {
-      p_document_id: row.id,
-      p_status: "failed",
-      p_file_search_name: null,
-      p_error: "oversize or missing object",
-    });
-    return;
-  }
+  // Phase 2b: an editable master overrides the original file. When present
+  // and non-empty, build the upload content straight from the string via
+  // Blob — a standard web API, never a Node-only text-extraction dependency
+  // (master_md is already plain text, so none is ever needed here).
+  // Otherwise, fall through to today's Storage list+download of the binary.
+  const masterText = row.master_md && row.master_md.trim().length > 0 ? row.master_md : null;
 
-  // Download the object.
-  const dl = await svc.storage.from(BUCKET).download(row.storage_path);
-  if (dl.error || !dl.data) {
-    await svc.rpc("update_document_status", {
-      p_document_id: row.id,
-      p_status: "failed",
-      p_file_search_name: null,
-      p_error: `download failed: ${dl.error?.message ?? "unknown"}`,
-    });
-    return;
+  let fileContent: Blob;
+
+  if (masterText) {
+    fileContent = new Blob([masterText], { type: "text/markdown" });
+  } else {
+    // Re-check the Storage object's size / existence from Storage metadata.
+    const listPath = row.storage_path.split("/").slice(0, -1).join("/");
+    const fileNameOnly = row.storage_path.split("/").slice(-1)[0];
+    const { data: objects, error: listErr } = await svc.storage
+      .from(BUCKET)
+      .list(listPath, { search: fileNameOnly, limit: 1 });
+    const meta = objects?.[0];
+    const objSize = (meta?.metadata as { size?: number } | undefined)?.size;
+    if (listErr || !meta || typeof objSize !== "number" || objSize > MAX_BYTES) {
+      await svc.rpc("update_document_status", {
+        p_document_id: row.id,
+        p_status: "failed",
+        p_file_search_name: null,
+        p_error: "oversize or missing object",
+      });
+      return;
+    }
+
+    // Download the object.
+    const dl = await svc.storage.from(BUCKET).download(row.storage_path);
+    if (dl.error || !dl.data) {
+      await svc.rpc("update_document_status", {
+        p_document_id: row.id,
+        p_status: "failed",
+        p_file_search_name: null,
+        p_error: `download failed: ${dl.error?.message ?? "unknown"}`,
+      });
+      return;
+    }
+    fileContent = dl.data;
   }
 
   // Determine the store to use for this org.
@@ -176,7 +191,7 @@ async function processOne(row: ClaimedRow) {
     try {
       const op = await ai.fileSearchStores.uploadToFileSearchStore({
         fileSearchStoreName: storeName,
-        file: dl.data,
+        file: fileContent,
         config: {
           displayName: row.file_name,
           customMetadata: [
