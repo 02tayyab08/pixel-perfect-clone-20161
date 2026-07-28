@@ -23,6 +23,64 @@ type ClaimedRow = {
   storage_path: string;
 };
 
+type FileSearchListDoc = {
+  name?: string;
+  customMetadata?: Array<{ key?: string; stringValue?: string }>;
+};
+
+/** Fully paginate documents under a File Search store. Mirrors the iterator in
+ *  documents.functions.ts::listFileSearchStoreDocuments — pageSize 20, reads
+ *  page.page ?? page.documents, 50-page safety cap. */
+async function listStoreDocuments(storeName: string): Promise<FileSearchListDoc[]> {
+  const ai = gemini();
+  const out: FileSearchListDoc[] = [];
+  let pageToken: string | undefined = undefined;
+  let pages = 0;
+  do {
+    const page = (await ai.fileSearchStores.documents.list({
+      parent: storeName,
+      config: { pageSize: 20, pageToken },
+    } as never)) as {
+      documents?: FileSearchListDoc[];
+      page?: FileSearchListDoc[];
+      nextPageToken?: string;
+    };
+    const batch = page.page ?? page.documents ?? [];
+    for (const d of batch) out.push(d);
+    pageToken = page.nextPageToken;
+    pages++;
+    if (pages >= 50) break;
+  } while (pageToken);
+  return out;
+}
+
+/** Delete every store copy whose customMetadata.document_id === documentId.
+ *  Throws on the first LIST or DELETE failure — caller must NOT upload if this
+ *  throws (would recreate a duplicate). */
+async function sweepStoreCopiesForDocument(
+  storeName: string,
+  documentId: string,
+): Promise<number> {
+  const ai = gemini();
+  const all = await listStoreDocuments(storeName);
+  const matches = all.filter((d) => {
+    if (!d.name) return false;
+    const id = (d.customMetadata ?? []).find((m) => m.key === "document_id")?.stringValue;
+    return id === documentId;
+  });
+  for (const d of matches) {
+    console.log(`[process-documents] sweep: deleting stale store copy ${d.name}`);
+    await ai.fileSearchStores.documents.delete({
+      name: d.name!,
+      config: { force: true },
+    } as never);
+  }
+  console.log(
+    `[process-documents] sweep: document_id=${documentId} deleted=${matches.length}`,
+  );
+  return matches.length;
+}
+
 async function processOne(row: ClaimedRow) {
   const svc = salniService();
 
@@ -85,6 +143,29 @@ async function processOne(row: ClaimedRow) {
       .eq("id", row.id);
     return;
   }
+
+  // Pre-upload sweep: remove EVERY existing store copy carrying this
+  // document_id so we never accumulate duplicates on re-ingest. If the sweep
+  // fails (list or delete), do NOT upload — leave the row queued for retry.
+  try {
+    await sweepStoreCopiesForDocument(storeName, row.id);
+  } catch (e) {
+    console.error("[process-documents] sweep failed, skipping upload", e);
+    await svc
+      .from("documents")
+      .update({ status: "queued" })
+      .eq("id", row.id);
+    return;
+  }
+
+  // Never a stale pointer: after a successful sweep, the store has no copy of
+  // this document. Clear the pointer now; on upload success
+  // update_document_status writes the new name, on failure the row correctly
+  // shows no store copy.
+  await svc
+    .from("documents")
+    .update({ file_search_document_name: null })
+    .eq("id", row.id);
 
   // Upload with backoff on transient errors.
   const ai = gemini();
