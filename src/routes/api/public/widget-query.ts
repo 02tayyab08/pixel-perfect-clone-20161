@@ -108,7 +108,7 @@ const CAPTURE_TOOL_DECL = {
               "The verbatim consent sentence shown to the visitor in the prior assistant message. Must be non-empty.",
           },
         },
-        required: ["consent_text"],
+        required: [],
       },
     },
   ],
@@ -421,7 +421,8 @@ export const Route = createFileRoute("/api/public/widget-query")({
             const isRefusal =
               !streamErrored &&
               !greetingTurn &&
-              (fullText.trim() === NOT_IN_DOCS || groundingChunks.length === 0);
+              (fullText.trim() === NOT_IN_DOCS ||
+                (groundingChunks.length === 0 && !capturedCall));
             send({ type: "meta", isRefusal });
 
             // REFUSAL GUARD: drop any pending capture on a refusal.
@@ -516,6 +517,29 @@ export const Route = createFileRoute("/api/public/widget-query")({
                   if (leadErr) {
                     console.error("[widget-query] upsert_lead failed", leadErr);
                   } else {
+                    // Edit 3: the capture turn otherwise ends with
+                    // fullTextLen=0 (the model emits the function call with
+                    // no accompanying text), leaving the visitor staring at
+                    // a blank reply. Only fill in a fallback acknowledgement
+                    // when the turn produced no text of its own — never
+                    // overwrite real model text.
+                    if (fullText.trim().length === 0) {
+                      const ack = "Thanks — I've got your details.";
+                      fullText = ack;
+                      send({ type: "delta", text: ack });
+                      if (msgRow?.id) {
+                        const { error: ackErr } = await svc
+                          .from("messages")
+                          .update({ content: ack })
+                          .eq("id", msgRow.id);
+                        if (ackErr) {
+                          console.error(
+                            "[widget-query] ack content update failed",
+                            ackErr,
+                          );
+                        }
+                      }
+                    }
                     send({ type: "lead_captured" });
                   }
                 } else {
