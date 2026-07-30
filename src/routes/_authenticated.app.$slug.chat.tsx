@@ -131,56 +131,72 @@ function ChatPage() {
     let markedContent: string | undefined;
     let isRefusal = false;
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop() ?? "";
-      for (const evt of events) {
-        const line = evt.split("\n").find((l) => l.startsWith("data: "));
-        if (!line) continue;
-        try {
-          const obj = JSON.parse(line.slice(6));
-          if (obj.type === "conversation") setConversationId(obj.id);
-          else if (obj.type === "delta") {
-            acc += obj.text;
-          } else if (obj.type === "override") {
-            acc = obj.text;
-          } else if (obj.type === "citations") {
-            const chunks = (obj.chunks ?? []) as GroundingChunkRow[];
-            const supports = (obj.supports ?? []) as GroundingSupportRow[];
-            const plan = buildCitationPresentation(acc, chunks, supports);
-            cits = plan.sources;
-            markedContent = plan.markedMarkdown;
-          } else if (obj.type === "meta") {
-            isRefusal = !!obj.isRefusal;
-            if (isRefusal) {
-              cits = [];
-              markedContent = undefined;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+        for (const evt of events) {
+          const line = evt.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
+          try {
+            const obj = JSON.parse(line.slice(6));
+            if (obj.type === "conversation") setConversationId(obj.id);
+            else if (obj.type === "delta") {
+              acc += obj.text;
+            } else if (obj.type === "override") {
+              acc = obj.text;
+            } else if (obj.type === "citations") {
+              const chunks = (obj.chunks ?? []) as GroundingChunkRow[];
+              const supports = (obj.supports ?? []) as GroundingSupportRow[];
+              const plan = buildCitationPresentation(acc, chunks, supports);
+              cits = plan.sources;
+              markedContent = plan.markedMarkdown;
+            } else if (obj.type === "meta") {
+              isRefusal = !!obj.isRefusal;
+              if (isRefusal) {
+                cits = [];
+                markedContent = undefined;
+              }
+            } else if (obj.type === "error") {
+              acc = `Error: ${obj.message}`;
             }
-          } else if (obj.type === "error") {
-            acc = `Error: ${obj.message}`;
+            setMessages((m) => {
+              const copy = [...m];
+              copy[copy.length - 1] = {
+                role: "assistant",
+                content: acc,
+                // Keep markers off while streaming — apply on the final state
+                // after busy clears (see render). Store plan on the message now.
+                markedContent: isRefusal ? undefined : markedContent,
+                citations: isRefusal ? [] : cits,
+                isRefusal,
+              };
+              return copy;
+            });
+          } catch {
+            // Ignore malformed frames.
           }
-          setMessages((m) => {
-            const copy = [...m];
-            copy[copy.length - 1] = {
-              role: "assistant",
-              content: acc,
-              // Keep markers off while streaming — apply on the final state
-              // after busy clears (see render). Store plan on the message now.
-              markedContent: isRefusal ? undefined : markedContent,
-              citations: isRefusal ? [] : cits,
-              isRefusal,
-            };
-            return copy;
-          });
-        } catch {
-          // Ignore malformed frames.
         }
       }
+    } catch {
+      // Connection dropped mid-stream. Preserve any partial answer and tell
+      // the visitor to retry; finally clears busy so the input re-enables.
+      setMessages((m) => {
+        const copy = [...m];
+        const last = copy[copy.length - 1];
+        const partial = last?.role === "assistant" && last.content ? last.content + "\n\n" : "";
+        copy[copy.length - 1] = {
+          role: "assistant",
+          content: partial + "The connection was interrupted — please try again.",
+        };
+        return copy;
+      });
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   return (
