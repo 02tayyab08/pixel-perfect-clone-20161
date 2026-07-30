@@ -246,46 +246,7 @@ export const listDocumentsFn = createServerFn({ method: "POST" })
       .limit(200);
     if (error) return { ok: false as const, error: error.message, rows: [] as [] };
 
-    const ids = (rows ?? []).map((r) => r.id as string);
-    type ProbeLite = {
-      document_id: string;
-      probe_class: string;
-      probe_confidence: string;
-      success_rate: number | null;
-      questions_grounded: number;
-      questions_total: number;
-      created_at: string;
-    };
-    const latestByDoc = new Map<string, ProbeLite>();
-    if (ids.length > 0) {
-      const { data: probes, error: pErr } = await asUser
-        .from("document_probes")
-        .select(
-          "document_id, probe_class, probe_confidence, success_rate, questions_grounded, questions_total, created_at",
-        )
-        .in("document_id", ids)
-        .order("created_at", { ascending: false });
-      if (pErr) {
-        console.error("listDocumentsFn: document_probes select failed", pErr.message);
-      } else {
-        for (const p of (probes ?? []) as ProbeLite[]) {
-          if (!latestByDoc.has(p.document_id)) latestByDoc.set(p.document_id, p);
-        }
-      }
-    }
-
-    const enriched = (rows ?? []).map((r) => {
-      const p = latestByDoc.get(r.id as string);
-      return {
-        ...r,
-        probe_class: p?.probe_class ?? null,
-        probe_confidence: p?.probe_confidence ?? null,
-        probe_success_rate: p?.success_rate ?? null,
-        probe_grounded: p ? `${p.questions_grounded}/${p.questions_total}` : null,
-      };
-    });
-
-    return { ok: true as const, rows: enriched };
+    return { ok: true as const, rows: rows ?? [] };
   });
 
 export const retryDocumentFn = createServerFn({ method: "POST" })
