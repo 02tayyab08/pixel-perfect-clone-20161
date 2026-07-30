@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AssistantMarkdown } from "@/components/assistant-markdown";
-import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -23,6 +24,13 @@ import {
 import { resolveCitationAutoPageIndex } from "@/lib/citations/autoPage";
 import { computeHighlights } from "@/lib/citations/computeHighlights";
 import { HIGHLIGHT_DEFAULTS } from "@/lib/citations/defaults";
+import {
+  listConversationsFn,
+  getConversationMessagesFn,
+  type ConversationListItem,
+} from "@/lib/conversations.functions";
+
+const NOT_IN_DOCS = "I don't have that in the provided documents.";
 
 type ChatMsg = {
   role: "user" | "assistant";
@@ -49,15 +57,89 @@ function ChatPage() {
   const [activeCite, setActiveCite] = useState<{ msgIdx: number; n: number } | null>(
     null,
   );
+  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
+  const [convListError, setConvListError] = useState<string | null>(null);
+  const [hydrating, setHydrating] = useState(false);
+  const [hydrateError, setHydrateError] = useState<string | null>(null);
   const isMobile = useIsMobile();
+  const listConversations = useServerFn(listConversationsFn);
+  const getMessages = useServerFn(getConversationMessagesFn);
   const lastContent = messages[messages.length - 1]?.content ?? "";
   const { containerRef, bottomRef, lastUserRef, markUserSent, onScroll } =
     useChatAutoscroll(lastContent, busy);
 
+  const refreshConversations = useCallback(async () => {
+    try {
+      const res = await listConversations({ data: { orgId: org.id } });
+      if (res.ok) {
+        setConversations(res.conversations);
+        setConvListError(null);
+      } else {
+        setConvListError(res.error);
+      }
+    } catch (e) {
+      setConvListError(e instanceof Error ? e.message : "Failed to load conversations");
+    }
+  }, [listConversations, org.id]);
+
+  useEffect(() => {
+    refreshConversations();
+  }, [refreshConversations]);
+
+  // Load a past conversation for DISPLAY only — never re-runs a query or the
+  // model. Maps stored rows to ChatMsg[]: plain content + clickable citation
+  // chips (no inline markers / no highlights — degraded reload scope).
+  async function loadConversation(id: string) {
+    if (busy || hydrating) return;
+    setHydrateError(null);
+    setHydrating(true);
+    setActiveCite(null);
+    setPanel(null);
+    try {
+      const res = await getMessages({ data: { orgId: org.id, conversationId: id } });
+      if (!res.ok) {
+        setHydrateError(res.error);
+        return;
+      }
+      const mapped: ChatMsg[] = res.messages.map((m) => {
+        const role = m.role === "user" ? "user" : "assistant";
+        const isRefusal = role === "assistant" && m.content.trim() === NOT_IN_DOCS;
+        const citations: CitationSource[] = isRefusal
+          ? []
+          : m.citations.map((c, idx) => ({
+              n: idx + 1,
+              chunkIndex: idx,
+              source_title: c.source_title,
+              snippet: c.snippet,
+              page: c.page,
+              document_id: c.document_id,
+              answerSegment: null,
+            }));
+        return { role, content: m.content, isRefusal, citations };
+      });
+      setMessages(mapped);
+      setConversationId(id);
+    } catch (e) {
+      setHydrateError(e instanceof Error ? e.message : "Failed to load conversation");
+    } finally {
+      setHydrating(false);
+    }
+  }
+
+  function newChat() {
+    if (busy || hydrating) return;
+    setMessages([]);
+    setConversationId(null);
+    setActiveCite(null);
+    setPanel(null);
+    setHydrateError(null);
+    setInput("");
+  }
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || hydrating) return;
     setBusy(true);
     setSettingUp(false);
     setInput("");
@@ -202,14 +284,59 @@ function ChatPage() {
     } finally {
       setBusy(false);
     }
+    // Refresh the recent list so a newly-created conversation appears.
+    refreshConversations();
   }
 
   return (
     <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-3xl flex-col">
-      <h1 className="font-display text-3xl font-semibold">Chat</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="font-display text-3xl font-semibold">Chat</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={newChat}
+          disabled={busy || hydrating}
+        >
+          <Plus className="mr-1 h-4 w-4" /> New chat
+        </Button>
+      </div>
       <p className="mt-2 text-sm text-muted-foreground">
         Ask a question. Answers come only from your uploaded documents.
       </p>
+
+      <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        {conversations.length === 0 && !convListError ? (
+          <span className="text-xs text-muted-foreground">No conversations yet.</span>
+        ) : (
+          conversations.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => loadConversation(c.id)}
+              disabled={busy || hydrating}
+              title={c.label}
+              className={`shrink-0 max-w-[12rem] truncate rounded-md border px-2 py-1 text-xs transition-colors ${
+                c.id === conversationId
+                  ? "border-primary bg-primary/5 text-foreground"
+                  : "border-border bg-background text-muted-foreground hover:border-primary hover:text-foreground"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))
+        )}
+      </div>
+      {convListError ? (
+        <p className="mt-2 text-xs text-destructive">
+          Couldn&rsquo;t load conversations: {convListError}
+        </p>
+      ) : null}
+      {hydrateError ? (
+        <p className="mt-2 text-xs text-destructive">
+          Couldn&rsquo;t load that conversation: {hydrateError}
+        </p>
+      ) : null}
 
       <div
         ref={containerRef}
@@ -219,7 +346,12 @@ function ChatPage() {
         aria-atomic="false"
         className="mt-6 flex-1 space-y-4 overflow-y-auto rounded-2xl border border-border bg-card p-6"
       >
-        {messages.length === 0 ? (
+        {hydrating ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading conversation…
+          </div>
+        ) : null}
+        {messages.length === 0 && !hydrating ? (
           <p className="text-sm text-muted-foreground">
             Ask a question about your documents to get started.
           </p>
@@ -330,9 +462,9 @@ function ChatPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask a question about your documents…"
-          disabled={busy}
+          disabled={busy || hydrating}
         />
-        <Button type="submit" disabled={busy || !input.trim()}>
+        <Button type="submit" disabled={busy || hydrating || !input.trim()}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
         </Button>
       </form>
