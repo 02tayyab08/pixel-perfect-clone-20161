@@ -412,7 +412,8 @@ export const Route = createFileRoute("/api/public/widget-query")({
               !streamErrored &&
               !greetingTurn &&
               fullText.trim().length > 0 &&
-              groundingChunks.length === 0
+              groundingChunks.length === 0 &&
+              !capturedCall
             ) {
               fullText = NOT_IN_DOCS;
               send({ type: "override", text: fullText });
