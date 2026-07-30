@@ -7,7 +7,6 @@ import {
   listDocumentsFn,
   markDocumentUploadFailedFn,
   retryDocumentFn,
-  backfillFileSearchNamesFn,
 } from "@/lib/documents.functions";
 import { retryWhileSetup } from "@/lib/retry-setup";
 import { Button } from "@/components/ui/button";
@@ -21,7 +20,6 @@ import {
   RefreshCw,
   Trash2,
   Upload,
-  Wrench,
   X,
 } from "lucide-react";
 
@@ -51,7 +49,6 @@ function DocumentsPage() {
   const listDocs = useServerFn(listDocumentsFn);
   const retryDoc = useServerFn(retryDocumentFn);
   const deleteDoc = useServerFn(deleteDocumentFn);
-  const backfill = useServerFn(backfillFileSearchNamesFn);
 
   const [rows, setRows] = useState<DocRow[]>([]);
   const [settingUp, setSettingUp] = useState(false);
@@ -60,8 +57,6 @@ function DocumentsPage() {
   const [confirmDelete, setConfirmDelete] = useState<DocRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [backfilling, setBackfilling] = useState(false);
-  const [backfillResult, setBackfillResult] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const tipsKey = `salni.docs-tips-dismissed.${org.id}`;
   const [tipsDismissed, setTipsDismissed] = useState(false);
@@ -163,26 +158,6 @@ function DocumentsPage() {
     }
   }
 
-  async function runBackfill() {
-    setBackfillResult(null);
-    setBackfilling(true);
-    try {
-      const res = await backfill({ data: { orgId: org.id } });
-      if (!("ok" in res) || !res.ok) {
-        setBackfillResult(`Backfill failed: ${"error" in res ? res.error : "unknown"}`);
-        return;
-      }
-      setBackfillResult(
-        `Backfill: ${res.candidates} candidate row(s), ${res.listed} File Search doc(s) listed, ${res.matched} matched, ${res.updated} updated.`,
-      );
-      refresh();
-    } catch (e) {
-      setBackfillResult(e instanceof Error ? e.message : "Backfill failed");
-    } finally {
-      setBackfilling(false);
-    }
-  }
-
   return (
     <div>
       <div className="flex items-start justify-between">
@@ -202,31 +177,12 @@ function DocumentsPage() {
             onChange={(e) => e.target.files && uploadFiles(e.target.files)}
           />
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={runBackfill}
-              disabled={backfilling}
-              title="List File Search docs and rewrite missing file_search_document_name values"
-            >
-              {backfilling ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Wrench className="mr-2 h-4 w-4" />
-              )}
-              Backfill FS names
-            </Button>
             <Button onClick={() => inputRef.current?.click()} disabled={busy}>
               <Upload className="mr-2 h-4 w-4" /> Upload files
             </Button>
           </div>
         </div>
       </div>
-
-      {backfillResult ? (
-        <div className="mt-4 rounded-md border border-border bg-accent/40 p-3 text-sm">
-          {backfillResult}
-        </div>
-      ) : null}
 
       <div
         onDragOver={(e) => e.preventDefault()}
