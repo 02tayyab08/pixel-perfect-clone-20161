@@ -110,11 +110,16 @@ function ChatPage() {
 
     if (!res.ok || !res.body) {
       const bodyText = await res.text().catch(() => "");
+      // Full detail stays in the console for diagnosis; the visitor sees a
+      // friendly message rather than a raw status + response body.
+      console.error(
+        `[chat] query failed status=${res.status} body=${bodyText || res.statusText || "no body"}`,
+      );
       setMessages((m) => {
         const copy = [...m];
         copy[copy.length - 1] = {
           role: "assistant",
-          content: `Error ${res.status}: ${bodyText || res.statusText || "no body"}`,
+          content: "Something went wrong — please try again.",
         };
         return copy;
       });
