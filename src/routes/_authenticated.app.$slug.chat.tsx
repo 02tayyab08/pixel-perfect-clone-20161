@@ -201,7 +201,7 @@ function ChatPage() {
 
   return (
     <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-3xl flex-col">
-      <h1 className="font-display text-3xl font-semibold">Chat playground</h1>
+      <h1 className="font-display text-3xl font-semibold">Chat</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Ask a question. Answers come only from your uploaded documents.
       </p>
@@ -213,7 +213,7 @@ function ChatPage() {
       >
         {messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Try: &ldquo;What&rsquo;s our refund policy?&rdquo;
+            Ask a question about your documents to get started.
           </p>
         ) : null}
         {messages.map((m, i) => {
@@ -321,7 +321,7 @@ function ChatPage() {
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a full question, e.g. 'What is the license cost at Meydan?'"
+          placeholder="Ask a question about your documents…"
           disabled={busy}
         />
         <Button type="submit" disabled={busy || !input.trim()}>
