@@ -214,6 +214,9 @@ function ChatPage() {
       <div
         ref={containerRef}
         onScroll={onScroll}
+        role="log"
+        aria-live="polite"
+        aria-atomic="false"
         className="mt-6 flex-1 space-y-4 overflow-y-auto rounded-2xl border border-border bg-card p-6"
       >
         {messages.length === 0 ? (
