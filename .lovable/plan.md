@@ -1,62 +1,67 @@
-# Fix: staff chat 403 on File Search store
+# Switch to your own Gemini API key + rebuild the File Search store
 
-## Root cause (evidence in logs, not a guess)
+## Short answer
 
-Published worker log for the failed turn:
+Do not paste the key into chat. Once you approve this plan I will open a secure
+secret form (Cloud secret `GEMINI_API_KEY`) where you enter the key yourself. It
+is stored encrypted and never appears in chat or logs — only a `len/prefix/tail`
+fingerprint is logged by the existing `[gemini-key]` line.
 
-```
-gemini.generateContentStream failed name=ApiError status=403
-  "You do not have permission to access the file search store
-   salnisharedv1-9sqs31x63vml or it may not exist."
-```
+## Why a rebuild is unavoidable
 
-The current `GEMINI_API_KEY` (`prefix=AQ.A tail=kcbw`) belongs to a different Gemini project than the one that originally created `salnisharedv1-9sqs31x63vml`. File Search stores are project-scoped, so the persisted `app_state.shared_store_name` is now unreachable. `bootstrapStore` reads `status:ready` from `claim_store_bootstrap` and returns the dead name unchanged.
+A Gemini File Search store belongs to the Google project that owns the API key.
+The SDK exposes only create / list / delete for stores and upload / list / delete
+for documents — no export, copy, or ownership transfer, and indexed chunks cannot
+be read back out. So the current store `salnisharedv21783566089761-mtddxxu2lj9k`
+becomes unreachable (403) the moment the key changes, and a fresh store must be
+created under your key and re-ingested.
 
-Model bump is not implicated:
-- `[gemini-model] query=gemini-3.5-flash source=default` — env resolution correct.
-- No `INVALID_ARGUMENT`, no `thinkingConfig` complaint — the request shape (including `thinkingLevel: LOW`) was accepted.
-- The 403 is store-permission, not model/tool.
+The source of truth is safe: original files live in Supabase Storage and the
+editable master lives in `documents.master_md`. Re-ingest replays from those.
 
-Side note: `[query-expansion] skipped: timeout` on `gemini-3.1-flash-lite` — the 800ms budget missed on cold path. Non-fatal (fail-open), not the failure. Leave for a separate pass.
+## Steps
 
-## Fix (schema is law — do NOT bypass RPCs)
+1. **Capture the key** — secure secret form for `GEMINI_API_KEY`. I confirm the
+   new fingerprint from the `[gemini-key]` log line and that it is not `AQ.A…kcbw`.
+2. **Point bootstrap at a fresh store** — clear the persisted shared store name
+   and any per-org `organizations.file_search_store_name` override that still
+   points at the old store, so the existing `claim_store_bootstrap` /
+   `finalize_store_bootstrap` path creates a new store on the next call. No
+   schema change, no new RPC: the reset is a data update through the service
+   client in a one-shot admin server function.
+3. **Verify the new store exists** — log the new store name once and confirm it
+   lists as empty under your key.
+4. **Re-ingest every document** — set every non-deleted `documents` row back to
+   `queued` and clear `file_search_document_name`. The existing cron worker
+   (`process-documents-worker`, every minute) drains the queue; the Phase 2a
+   pre-upload sweep keeps it at one store copy per document.
+5. **Watch it drain** — report per-org counts of `queued` → `ready` → `failed`,
+   plus the raw error text for any row that ends `failed`.
+6. **Verify end to end** — staff chat factual question returns a grounded answer
+   with `grounding=` non-zero and no 403; widget question same; one citation
+   chip opens with a real snippet.
 
-The recovery has to happen through the existing bootstrap RPCs in `02_FINAL_SCHEMA_V3.sql`. I will:
+## Cost and downtime
 
-### 1. Confirm current state before touching anything
-- Read `app_state` row to confirm `shared_store_name = 'salnisharedv1-9sqs31x63vml'`.
-- Read any `organizations.file_search_store_name` overrides — if a per-org override exists and is also orphaned, same problem applies to that org.
-- List stores under the current key via `ai.fileSearchStores.list()` in a one-shot server function log to prove the store isn't visible.
-
-### 2. Reset shared bootstrap state via a new admin RPC
-Add migration that introduces `reset_store_bootstrap()`:
-- `SECURITY DEFINER`, granted to `service_role` only.
-- Clears `app_state.shared_store_name` and resets any claim/lease columns so the next `claim_store_bootstrap()` call returns `claimed` and re-creates the store under the current key.
-- No changes to the `claim_store_bootstrap` / `finalize_store_bootstrap` contract already used by `bootstrapStore`.
-
-### 3. Trigger a one-time reset + re-bootstrap
-- Add a protected `createServerFn` `resetSharedStore` gated behind `requireSupabaseAuth` + `has_role(auth.uid(), 'admin')`. On call: RPC `reset_store_bootstrap`, then `bootstrapStore(null)` which enters the `claimed` branch and creates a fresh store on the current key.
-- Also delete the old (unreachable) store name from any `organizations.file_search_store_name` overrides that match the orphan.
-- After reset, org documents will need to be re-uploaded to the new store. The document-processing path already handles enqueue/re-upload against the current shared store — I will confirm the reprocess trigger exists (or add a "reprocess all" admin action if it doesn't).
-
-### 4. Verify
-- Staff chat one factual question → expect `[query] grounding=<n>` non-zero, no 403.
-- Widget one factual question → same.
-- Log the new store name once from `bootstrapStore` for the record.
-
-## Not doing in this change
-
-- No touch to `thinkingLevel`, `QUERY_MODEL`, `expandQueryTerms`, tool array shape, or prompt text. All ruled out by the raw error.
-- No revert of the model bump. Cursor's changes stay.
-- No schema rewrite — only an additive `reset_store_bootstrap` RPC in a new migration.
+Re-ingest is one upload + indexing pass per document (currently ~20 documents),
+billed to your Google project. During the window between step 2 and the queue
+draining, chat will refuse for lack of grounding rather than error.
 
 ## Files to change
 
-- `supabase/migrations/<ts>_reset_store_bootstrap.sql` — new RPC + grants (adheres to public-schema-grants + user-roles rules).
-- `src/lib/store-bootstrap.server.ts` — small helper to invoke the reset (server-only).
-- `src/lib/admin.functions.ts` (new or existing) — `resetSharedStore` protected server fn; admin-role checked via `context.supabase` under RLS before importing `supabaseAdmin`.
-- No client UI change required for the fix itself (I'll call it once from a server-fn invocation); can add an admin button later if you want.
+- `src/lib/store-bootstrap.server.ts` — no logic change; add a single log of the
+  resolved store name for the record.
+- `src/lib/admin.functions.ts` (new) — `resetSharedStoreAndReingest`, protected by
+  `requireSupabaseAuth` plus an admin role check via `context.supabase` before
+  any privileged client is loaded. Clears the shared store pointer, clears stale
+  org overrides, re-queues documents.
+- No schema migration. No change to the query path, models, prompts, or the
+  refusal string.
 
-## Open question before I build
+## Rollback
 
-The re-created store will be empty. Do you want the reset fn to also enqueue a full reprocess of every org's documents into the new store in the same turn, or should reprocess be a separate explicit admin step so you can watch it? Default I'll go with if you don't answer: same turn, enqueue all, log per-org counts.
+If your key turns out to lack File Search access, restoring the previous key does
+not restore the old store contents once step 2 has run — but nothing is lost:
+re-ingest replays from Supabase Storage / `master_md` against whichever key is
+active. I will confirm your key can create a store (step 3) before touching any
+document rows.
